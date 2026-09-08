@@ -28,7 +28,7 @@ static CURLcode test_lib3010(const char *URL)
   CURLcode result = TEST_ERR_MAJOR_BAD;
   CURL *curl = NULL;
   curl_off_t retry_after;
-  char *follow_url = NULL;
+  const char *follow_url = NULL;
 
   curl_global_init(CURL_GLOBAL_ALL);
   curl = curl_easy_init();
@@ -39,7 +39,8 @@ static CURLcode test_lib3010(const char *URL)
     if(result) {
       curl_mfprintf(stderr,
                     "%s:%d curl_easy_perform() failed with code %d (%s)\n",
-                    __FILE__, __LINE__, result, curl_easy_strerror(result));
+                    __FILE__, __LINE__, (int)result,
+                    curl_easy_strerror(result));
       goto test_cleanup;
     }
     curl_easy_getinfo(curl, CURLINFO_REDIRECT_URL, &follow_url);
@@ -50,7 +51,8 @@ static CURLcode test_lib3010(const char *URL)
     if(result) {
       curl_mfprintf(stderr,
                     "%s:%d curl_easy_perform() failed with code %d (%s)\n",
-                    __FILE__, __LINE__, result, curl_easy_strerror(result));
+                    __FILE__, __LINE__, (int)result,
+                    curl_easy_strerror(result));
       goto test_cleanup;
     }
 

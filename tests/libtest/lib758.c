@@ -147,6 +147,7 @@ static int t758_curlSocketCallback(CURL *curl, curl_socket_t s, int action,
                                    void *userp, void *socketp)
 {
   struct t758_ReadWriteSockets *sockets = userp;
+  CURLcode result;
 
   (void)curl;
   (void)socketp;
@@ -155,6 +156,14 @@ static int t758_curlSocketCallback(CURL *curl, curl_socket_t s, int action,
   t758_msg("-> CURLMOPT_SOCKETFUNCTION");
   if(t758_ctx.socket_calls == t758_ctx.max_socket_calls) {
     t758_msg("<- CURLMOPT_SOCKETFUNCTION returns error");
+    return -1;
+  }
+
+  /* Pause is forbidden in this callback. This also returns
+     CURLE_BAD_FUNCTION_ARGUMENT before the connection has been setup. */
+  result = curl_easy_pause(curl, CURLPAUSE_ALL);
+  if(!result) {
+    t758_msg("<- curl_easy_pause should return error!");
     return -1;
   }
 
@@ -249,8 +258,8 @@ static int t758_checkForCompletion(CURLM *multi, int *success)
         *success = 0;
     }
     else {
-      curl_mfprintf(stderr, "%s got an unexpected message from curl: %i\n",
-                    t758_tag(), message->msg);
+      curl_mfprintf(stderr, "%s got an unexpected message from curl: %d\n",
+                    t758_tag(), (int)message->msg);
       result = 1;
       *success = 0;
     }
@@ -263,7 +272,7 @@ static ssize_t t758_getMicroSecondTimeout(struct curltime *timeout)
   struct curltime now;
   ssize_t result;
   now = curlx_now();
-  result = (ssize_t)((timeout->tv_sec - now.tv_sec) * 1000000 +
+  result = (ssize_t)(((timeout->tv_sec - now.tv_sec) * 1000000) +
     timeout->tv_usec - now.tv_usec);
   if(result < 0)
     result = 0;
@@ -279,14 +288,7 @@ static void t758_updateFdSet(struct t758_Sockets *sockets, fd_set *fdset,
 {
   int i;
   for(i = 0; i < sockets->count; ++i) {
-#ifdef __DJGPP__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warith-conversion"
-#endif
     FD_SET(sockets->sockets[i], fdset);
-#ifdef __DJGPP__
-#pragma GCC diagnostic pop
-#endif
     if(*maxFd < sockets->sockets[i] + 1) {
       *maxFd = sockets->sockets[i] + 1;
     }
@@ -300,7 +302,7 @@ static CURLMcode t758_saction(CURLM *multi, curl_socket_t s,
   CURLMcode mresult = curl_multi_socket_action(multi, s, evBitmask,
                                                &numhandles);
   if(mresult != CURLM_OK) {
-    curl_mfprintf(stderr, "%s curl error on %s (%i) %s\n",
+    curl_mfprintf(stderr, "%s curl error on %s (%d) %s\n",
                   t758_tag(), info, mresult, curl_multi_strerror(mresult));
   }
   return mresult;
@@ -314,15 +316,15 @@ static CURLMcode t758_checkFdSet(CURLM *multi, struct t758_Sockets *sockets,
                                  const char *name)
 {
   int i;
-  CURLMcode result = CURLM_OK;
+  CURLMcode mresult = CURLM_OK;
   for(i = 0; i < sockets->count; ++i) {
     if(FD_ISSET(sockets->sockets[i], fdset)) {
-      result = t758_saction(multi, sockets->sockets[i], evBitmask, name);
-      if(result)
+      mresult = t758_saction(multi, sockets->sockets[i], evBitmask, name);
+      if(mresult)
         break;
     }
   }
-  return result;
+  return mresult;
 }
 
 static CURLcode t758_one(const char *URL, int timer_fail_at,
@@ -359,7 +361,7 @@ static CURLcode t758_one(const char *URL, int timer_fail_at,
   easy_init(curl);
   debug_config.nohex = TRUE;
   debug_config.tracetime = TRUE;
-  test_setopt(curl, CURLOPT_DEBUGDATA, &debug_config);
+  easy_setopt(curl, CURLOPT_DEBUGDATA, &debug_config);
   easy_setopt(curl, CURLOPT_DEBUGFUNCTION, libtest_debug_cb);
   easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
@@ -393,7 +395,8 @@ static CURLcode t758_one(const char *URL, int timer_fail_at,
 
     if(t758_ctx.fake_async_cert_verification_pending &&
        !t758_ctx.fake_async_cert_verification_finished) {
-      if(sockets.read.count || sockets.write.count) {
+      /* the wakeup socket is monitored */
+      if((sockets.read.count > 1) || sockets.write.count) {
         t758_msg("during verification there should be no sockets scheduled");
         result = TEST_ERR_MAJOR_BAD;
         goto test_cleanup;
@@ -492,14 +495,14 @@ test_cleanup:
 
 static CURLcode test_lib758(const char *URL)
 {
-  CURLcode rc;
+  CURLcode result;
   /* rerun the same transfer multiple times and make it fail in different
      callback calls */
-  rc = t758_one(URL, 0, 0); /* no callback fails */
-  if(rc)
-    curl_mfprintf(stderr, "%s FAILED: %d\n", t758_tag(), rc);
+  result = t758_one(URL, 0, 0); /* no callback fails */
+  if(result)
+    curl_mfprintf(stderr, "%s FAILED: %d\n", t758_tag(), (int)result);
 
-  return rc;
+  return result;
 }
 
 #else /* T578_ENABLED */

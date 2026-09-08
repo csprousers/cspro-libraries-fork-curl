@@ -24,11 +24,10 @@
 #include "first.h"
 
 /*
- * From "KNOWN_BUGS" April 2009:
+  From "KNOWN_BUGS" April 2009:
 
- 59. If the CURLOPT_PORT option is used on an FTP URL like
- "ftp://example.com/file;type=A" the ";type=A" is stripped off.
-
+  59. If the CURLOPT_PORT option is used on an FTP URL like
+      "ftp://example.com/file;type=A" the ";type=A" is stripped off.
  */
 
 static CURLcode test_lib562(const char *URL)
@@ -54,13 +53,13 @@ static CURLcode test_lib562(const char *URL)
   }
 
   /* enable verbose */
-  test_setopt(curl, CURLOPT_VERBOSE, 1L);
+  easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
   /* set port number */
-  test_setopt(curl, CURLOPT_PORT, (long)port);
+  easy_setopt(curl, CURLOPT_PORT, (long)port);
 
   /* specify target */
-  test_setopt(curl, CURLOPT_URL, URL);
+  easy_setopt(curl, CURLOPT_URL, URL);
 
   /* Now run off and do what you have been told! */
   result = curl_easy_perform(curl);

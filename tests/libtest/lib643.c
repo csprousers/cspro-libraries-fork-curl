@@ -46,12 +46,12 @@ static size_t t643_read_cb(char *ptr, size_t size, size_t nmemb, void *userp)
   }
 
   if(!eof) {
-    *ptr = *pooh->readptr;           /* copy one single byte */
-    pooh->readptr++;                 /* advance pointer */
-    return 1;                        /* we return 1 byte at a time! */
+    *ptr = *pooh->readptr;  /* copy one single byte */
+    pooh->readptr++;        /* advance pointer */
+    return 1;               /* we return 1 byte at a time! */
   }
 
-  return 0;                          /* no more data left to deliver */
+  return 0;                 /* no more data left to deliver */
 }
 
 static CURLcode t643_test_once(const char *URL, bool oldstyle)
@@ -69,7 +69,7 @@ static CURLcode t643_test_once(const char *URL, bool oldstyle)
 
   pooh.readptr = testdata;
   if(testnum == 643)
-    datasize = (curl_off_t)strlen(testdata);
+    datasize = (curl_off_t)CURL_CSTRLEN(testdata);
   pooh.sizeleft = datasize;
 
   curl = curl_easy_init();
@@ -123,7 +123,7 @@ static CURLcode t643_test_once(const char *URL, bool oldstyle)
 
   pooh2.readptr = testdata;
   if(testnum == 643)
-    datasize = (curl_off_t)strlen(testdata);
+    datasize = (curl_off_t)CURL_CSTRLEN(testdata);
   pooh2.sizeleft = datasize;
 
   part = curl_mime_addpart(mime);
@@ -194,18 +194,18 @@ static CURLcode t643_test_once(const char *URL, bool oldstyle)
     curl_mprintf("curl_mime_xxx(5) = %s\n", curl_easy_strerror(result));
 
   /* First set the URL that is about to receive our POST. */
-  test_setopt(curl, CURLOPT_URL, URL);
+  easy_setopt(curl, CURLOPT_URL, URL);
 
   /* send a multi-part mimepost */
-  test_setopt(curl, CURLOPT_MIMEPOST, mime);
+  easy_setopt(curl, CURLOPT_MIMEPOST, mime);
 
   /* get verbose debug output please */
-  test_setopt(curl, CURLOPT_VERBOSE, 1L);
+  easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
   /* include headers in the output */
-  test_setopt(curl, CURLOPT_HEADER, 1L);
+  easy_setopt(curl, CURLOPT_HEADER, 1L);
 
-  /* Perform the request, result will get the return code */
+  /* Perform the request, result gets the return code */
   result = curl_easy_perform(curl);
 
 test_cleanup:
@@ -224,19 +224,19 @@ static CURLcode t643_cyclic_add(void)
   CURL *curl = curl_easy_init();
   curl_mime *mime = curl_mime_init(curl);
   curl_mimepart *part = curl_mime_addpart(mime);
-  CURLcode a1 = curl_mime_subparts(part, mime);
+  CURLcode result = curl_mime_subparts(part, mime);
 
-  if(a1 == CURLE_BAD_FUNCTION_ARGUMENT) {
+  if(result == CURLE_BAD_FUNCTION_ARGUMENT) {
     curl_mime *submime = curl_mime_init(curl);
     curl_mimepart *subpart = curl_mime_addpart(submime);
 
     curl_mime_subparts(part, submime);
-    a1 = curl_mime_subparts(subpart, mime);
+    result = curl_mime_subparts(subpart, mime);
   }
 
   curl_mime_free(mime);
   curl_easy_cleanup(curl);
-  if(a1 != CURLE_BAD_FUNCTION_ARGUMENT)
+  if(result != CURLE_BAD_FUNCTION_ARGUMENT)
     /* that should have failed */
     return TEST_ERR_FAILURE;
 

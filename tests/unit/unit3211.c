@@ -22,23 +22,23 @@
  *
  ***************************************************************************/
 #include "unitcheck.h"
-
 #include "urldata.h"
 #include "uint-bset.h"
+#include "uint-hashset.h"
 #include "curl_trc.h"
 
-static void check_set(const char *name, unsigned int capacity,
-                      const unsigned int *s, size_t slen)
+static void t3211_check_bset(const char *name, uint32_t capacity,
+                             const uint32_t *s, size_t slen)
 {
   struct uint32_bset bset;
   size_t i, j;
-  unsigned int n, c;
+  uint32_t n, c;
 
   curl_mfprintf(stderr, "test %s, capacity=%u, %zu numbers\n",
                 name, capacity, slen);
   Curl_uint32_bset_init(&bset);
   fail_unless(!Curl_uint32_bset_resize(&bset, capacity), "bset resize failed");
-  c = Curl_uint32_bset_capacity(&bset);
+  c = uint32_bset_capacity(&bset);
   fail_unless(c == (((capacity + 63) / 64) * 64), "wrong capacity");
 
   Curl_uint32_bset_clear(&bset);
@@ -69,7 +69,7 @@ static void check_set(const char *name, unsigned int capacity,
   }
 
   /* Adding capacity number does not work (0 - capacity-1) */
-  c = Curl_uint32_bset_capacity(&bset);
+  c = uint32_bset_capacity(&bset);
   fail_unless(!Curl_uint32_bset_add(&bset, c), "add out of range worked");
   /* The count it correct */
   c = Curl_uint32_bset_count(&bset);
@@ -110,7 +110,7 @@ static void check_set(const char *name, unsigned int capacity,
   fail_unless(!Curl_uint32_bset_resize(&bset, capacity / 2),
               "resize half failed");
   /* halved the size, what numbers remain in set? */
-  c = Curl_uint32_bset_capacity(&bset);
+  c = uint32_bset_capacity(&bset);
   n = 0;
   for(i = 0; i < slen; ++i) {
     if(s[i] < c)
@@ -123,15 +123,112 @@ static void check_set(const char *name, unsigned int capacity,
   Curl_uint32_bset_destroy(&bset);
 }
 
+static bool t3211_strcmp(const char *s1, const char *s2)
+{
+  if(s1 && s2)
+    return strcmp(s1, s2);
+  return s1 == s2;
+}
+
+static void t3211_check_strset1(void)
+{
+  struct u8_strset set;
+  char buf[128];
+  CURLcode result;
+  uint8_t i, idx;
+  int j;
+
+  Curl_u8_strset_init(&set);
+  fail_unless(!Curl_u8_strset_count(&set), "initial strset not empty");
+
+  result = Curl_u8_strset_set(&set, 0, "123");
+  fail_unless(!result, "add1 failed");
+  fail_unless(Curl_u8_strset_get(&set, 0), "get failed");
+  fail_unless(!t3211_strcmp("123", Curl_u8_strset_get(&set, 0)), "wrong get1");
+  result = Curl_u8_strset_set(&set, 0, "456");
+  fail_unless(!result, "add2 failed");
+  fail_unless(!t3211_strcmp("456", Curl_u8_strset_get(&set, 0)), "wrong get2");
+  Curl_u8_strset_unset(&set, 0);
+  fail_unless(!Curl_u8_strset_get(&set, 0), "unset failed");
+
+  /* Initial size is 8, add 8 hash collisions */
+  for(i = 0; i < 8; ++i) {
+    idx = (uint8_t)((8 * i) + 3);
+    curl_msnprintf(buf, sizeof(buf), "str-%d", idx);
+    result = Curl_u8_strset_set(&set, idx, buf);
+    fail_unless(!result, "loop4-add failed");
+    fail_unless(!t3211_strcmp(buf, Curl_u8_strset_get(&set, idx)),
+                "wrong get loop4");
+  }
+
+  /* Remove collided entry 2, check again */
+  idx = (uint8_t)((8 * 2) + 3);
+  Curl_u8_strset_unset(&set, idx);
+  fail_unless(!Curl_u8_strset_get(&set, idx), "unset2 failed");
+  for(i = 0; i < 8; ++i) {
+    if(i == 2)
+      continue;
+    idx = (uint8_t)((8 * i) + 3);
+    curl_msnprintf(buf, sizeof(buf), "str-%d", idx);
+    fail_unless(!t3211_strcmp(buf, Curl_u8_strset_get(&set, idx)),
+                "wrong get loop6");
+  }
+
+  /* Add entry 2 again, check */
+  idx = (uint8_t)((8 * 2) + 3);
+  curl_msnprintf(buf, sizeof(buf), "str-%d", idx);
+  result = Curl_u8_strset_set(&set, idx, buf);
+  fail_unless(!result, "re-add 2 failed");
+  fail_unless(!t3211_strcmp(buf, Curl_u8_strset_get(&set, idx)),
+              "wrong re-add 2 get");
+  for(i = 0; i < 8; ++i) {
+    idx = (uint8_t)((8 * i) + 3);
+    curl_msnprintf(buf, sizeof(buf), "str-%d", idx);
+    fail_unless(!t3211_strcmp(buf, Curl_u8_strset_get(&set, idx)),
+                "wrong get loop6");
+  }
+
+  /* Add a 9th, set grows */
+  fail_unless(Curl_u8_strset_count(&set) == 8, "wrong count pre add 5");
+  idx = (uint8_t)((9 * 4) + 3);
+  curl_msnprintf(buf, sizeof(buf), "str-%d", idx);
+  result = Curl_u8_strset_set(&set, idx, buf);
+  fail_unless(!result, "add4 failed");
+  fail_unless(!t3211_strcmp(buf, Curl_u8_strset_get(&set, idx)),
+              "wrong get4");
+  for(i = 0; i < 9; ++i) {
+    idx = (uint8_t)((8 * i) + 3);
+    curl_msnprintf(buf, sizeof(buf), "str-%d", idx);
+    fail_unless(!t3211_strcmp(buf, Curl_u8_strset_get(&set, idx)),
+                "wrong get loop5");
+  }
+  fail_unless(Curl_u8_strset_count(&set) == 9, "wrong count aftger add 5");
+
+  Curl_u8_strset_clear(&set);
+
+  /* Make a full set */
+  for(j = 0; j <= UINT8_MAX; ++j) {
+    i = (uint8_t)j;
+    curl_msnprintf(buf, sizeof(buf), "str-%d", i);
+    result = Curl_u8_strset_set(&set, i, buf);
+    fail_unless(!result, "loop256-add failed");
+    fail_unless(!t3211_strcmp(buf, Curl_u8_strset_get(&set, i)),
+                "wrong get loop256");
+  }
+
+  Curl_u8_strset_clear(&set);
+  fail_unless(!Curl_u8_strset_count(&set), "cleared strset not empty");
+}
+
 static CURLcode test_unit3211(const char *arg)
 {
   UNITTEST_BEGIN_SIMPLE
 
-  static const unsigned int s1[] = {
+  static const uint32_t s1[] = {
     /* spread numbers, some at slot edges */
     0, 1, 4, 17, 63, 64, 65, 66, 90, 99,
   };
-  static const unsigned int s2[] = {
+  static const uint32_t s2[] = {
     /* set with all bits in slot1 set */
     64, 65, 66, 67, 68, 69, 70, 71,
     72, 73, 74, 75, 76, 77, 78, 79,
@@ -143,8 +240,10 @@ static CURLcode test_unit3211(const char *arg)
     120, 121, 122, 123, 124, 125, 126, 127,
   };
 
-  check_set("s1", 100, s1, CURL_ARRAYSIZE(s1));
-  check_set("s2", 1000, s2, CURL_ARRAYSIZE(s2));
+  t3211_check_bset("s1", 100, s1, CURL_ARRAYSIZE(s1));
+  t3211_check_bset("s2", 1000, s2, CURL_ARRAYSIZE(s2));
+
+  t3211_check_strset1();
 
   UNITTEST_END_SIMPLE
 }

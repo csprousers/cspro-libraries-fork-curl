@@ -21,11 +21,11 @@
  * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
-#include "../curl_setup.h"
+#include "curl_setup.h"
 
 #if defined(USE_MBEDTLS) || defined(USE_RUSTLS)
 
-#include "cipher_suite.h"
+#include "vtls/cipher_suite.h"
 
 /*
  * To support the CURLOPT_SSL_CIPHER_LIST option on SSL backends
@@ -48,7 +48,7 @@
 
 /* Text for cipher suite parts (max 64 entries),
    keep indexes below in sync with this! */
-static const char *cs_txt =
+static const char cs_txt[] =
   "\0"
   "TLS" "\0"
   "WITH" "\0"
@@ -159,13 +159,11 @@ struct cs_entry {
 /* !checksrc! disable COMMANOSPACE all */
 static const struct cs_entry cs_list[] = {
   /* TLS 1.3 ciphers */
-#if defined(USE_MBEDTLS) || defined(USE_RUSTLS)
   CS_ENTRY(0x1301, TLS,AES,128,GCM,SHA256,,,),
   CS_ENTRY(0x1302, TLS,AES,256,GCM,SHA384,,,),
   CS_ENTRY(0x1303, TLS,CHACHA20,POLY1305,SHA256,,,,),
   CS_ENTRY(0x1304, TLS,AES,128,CCM,SHA256,,,),
   CS_ENTRY(0x1305, TLS,AES,128,CCM,8,SHA256,,),
-#endif
   /* TLS 1.2 ciphers */
   CS_ENTRY(0xC02B, TLS,ECDHE,ECDSA,WITH,AES,128,GCM,SHA256),
   CS_ENTRY(0xC02B, ECDHE,ECDSA,AES128,GCM,SHA256,,,),
@@ -232,8 +230,6 @@ static const struct cs_entry cs_list[] = {
   CS_ENTRY(0xC031, ECDH,RSA,AES128,GCM,SHA256,,,),
   CS_ENTRY(0xC032, TLS,ECDH,RSA,WITH,AES,256,GCM,SHA384),
   CS_ENTRY(0xC032, ECDH,RSA,AES256,GCM,SHA384,,,),
-#endif
-#ifdef USE_MBEDTLS
   CS_ENTRY(0x0001, TLS,RSA,WITH,NULL,MD5,,,),
   CS_ENTRY(0x0001, NULL,MD5,,,,,,),
   CS_ENTRY(0x0002, TLS,RSA,WITH,NULL,SHA,,,),
@@ -320,8 +316,6 @@ static const struct cs_entry cs_list[] = {
   CS_ENTRY(0xC036, ECDHE,PSK,AES256,CBC,SHA,,,),
   CS_ENTRY(0xCCAB, TLS,PSK,WITH,CHACHA20,POLY1305,SHA256,,),
   CS_ENTRY(0xCCAB, PSK,CHACHA20,POLY1305,,,,,),
-#endif
-#ifdef USE_MBEDTLS
   CS_ENTRY(0xC09C, TLS,RSA,WITH,AES,128,CCM,,),
   CS_ENTRY(0xC09C, AES128,CCM,,,,,,),
   CS_ENTRY(0xC09D, TLS,RSA,WITH,AES,256,CCM,,),
@@ -338,8 +332,6 @@ static const struct cs_entry cs_list[] = {
   CS_ENTRY(0xC0AE, ECDHE,ECDSA,AES128,CCM8,,,,),
   CS_ENTRY(0xC0AF, TLS,ECDHE,ECDSA,WITH,AES,256,CCM,8),
   CS_ENTRY(0xC0AF, ECDHE,ECDSA,AES256,CCM8,,,,),
-#endif
-#ifdef USE_MBEDTLS
   /* entries marked ns are "non-standard", they are not in OpenSSL */
   CS_ENTRY(0x0041, TLS,RSA,WITH,CAMELLIA,128,CBC,SHA,),
   CS_ENTRY(0x0041, CAMELLIA128,SHA,,,,,,),
@@ -647,7 +639,7 @@ uint16_t Curl_cipher_suite_lookup_id(const char *cs_str, size_t cs_len)
 
   if(cs_len > 0 && cs_str_to_zip(cs_str, cs_len, zip) == 0) {
     for(i = 0; i < CS_LIST_LEN; i++) {
-      if(memcmp(cs_list[i].zip, zip, sizeof(zip)) == 0)
+      if(!memcmp(cs_list[i].zip, zip, sizeof(zip)))
         return cs_list[i].id;
     }
   }

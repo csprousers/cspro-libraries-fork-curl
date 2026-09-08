@@ -19,9 +19,9 @@ Our C code has a few style rules. Most of them are verified and upheld by the
 by the build system when built after `./configure --enable-debug` has been
 used.
 
-It is normally not a problem for anyone to follow the guidelines, as you just
-need to copy the style already used in the source code and there are no
-particularly unusual rules in our set of rules.
+It is normally not a problem for anyone to follow the guidelines, copy
+the style already used in the source code and there are no particularly
+unusual rules in our set of rules.
 
 We also work hard on writing code that are warning-free on all the major
 platforms and in general on as many platforms as possible. Code that causes
@@ -39,7 +39,7 @@ understand it when debugging.
 
 Try using a non-confusing naming scheme for your new functions and variable
 names. It does not necessarily have to mean that you should use the same as in
-other places of the code, just that the names should be logical,
+other places of the code, only that the names should be logical,
 understandable and be named according to what they are used for. File-local
 functions should be made static. We like lower case names.
 
@@ -104,7 +104,7 @@ if(!x)
 For functions the opening brace should be on a separate line:
 
 ```c
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
   return 1;
 }
@@ -206,6 +206,17 @@ ptr = &address;
 contents = *pointer;
 complement = ~bits;
 empty = (!*string) ? TRUE : FALSE;
+```
+
+## No space following typecasts
+
+As far as possible, we write code to avoid typecasts. When we do use them, We
+write typecasts "glued" to the following expression, with no space after the
+closing parenthesis:
+
+```c
+int value = (int)foobar;
+char *ptr = (char *)random_func();
 ```
 
 ## No parentheses for return values
@@ -332,6 +343,8 @@ makes us write better code.
 This is the full list of functions generally banned.
 
     _access
+    _fstati64
+    _lseeki64
     _mbscat
     _mbsncat
     _open
@@ -346,13 +359,16 @@ This is the full list of functions generally banned.
     _wfopen
     _wfreopen
     _wopen
+    abort
     accept
     accept4
     access
     aprintf
+    assert
     atoi
     atol
     calloc
+    close
     CreateFile
     CreateFileA
     CreateFileW
@@ -363,9 +379,13 @@ This is the full list of functions generally banned.
     free
     freeaddrinfo
     freopen
+    fstat
     getaddrinfo
     gets
     gmtime
+    inet_ntop
+    inet_pton
+    llseek
     LoadLibrary
     LoadLibraryA
     LoadLibraryEx
@@ -373,6 +393,7 @@ This is the full list of functions generally banned.
     LoadLibraryExW
     LoadLibraryW
     localtime
+    lseek
     malloc
     mbstowcs
     MoveFileEx

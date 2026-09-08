@@ -23,9 +23,9 @@
  * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
-#include "../curl_setup.h"
+#include "curl_setup.h"
 
-#include "timediff.h"
+#include "curlx/timediff.h"
 
 struct curltime {
   time_t tv_sec; /* seconds */
@@ -58,6 +58,9 @@ timediff_t curlx_ptimediff_ms(const struct curltime *newer,
  */
 timediff_t curlx_timediff_ceil_ms(struct curltime newer,
                                   struct curltime older);
+
+/* Returns milliseconds from microseconds, rounded up. */
+timediff_t curlx_us_to_ceil_ms(timediff_t us);
 
 /*
  * Make sure that the first argument (newer) is the more recent time and older

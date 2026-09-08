@@ -25,8 +25,6 @@
  ***************************************************************************/
 #include "curl_setup.h"
 
-#include "sockaddr.h" /* required for Curl_sockaddr_storage */
-
 struct Curl_addrinfo;
 struct Curl_cfilter;
 struct Curl_easy;
@@ -34,23 +32,6 @@ struct connectdata;
 struct Curl_sockaddr_ex;
 struct ip_quadruple;
 
-/*
- * The Curl_sockaddr_ex structure is basically libcurl's external API
- * curl_sockaddr structure with enough space available to directly hold any
- * protocol-specific address structures. The variable declared here will be
- * used to pass / receive data to/from the fopensocket callback if this has
- * been set, before that, it is initialized from parameters.
- */
-struct Curl_sockaddr_ex {
-  int family;
-  int socktype;
-  int protocol;
-  unsigned int addrlen;
-  union {
-    struct sockaddr sa;
-    struct Curl_sockaddr_storage buf;
-  } addr;
-};
 #define curl_sa_addr    addr.sa
 #define curl_sa_addrbuf addr.buf
 
@@ -59,6 +40,10 @@ struct Curl_sockaddr_ex {
  */
 CURLcode Curl_parse_interface(const char *input,
                               char **dev, char **iface, char **host);
+
+CURLcode Curl_socket_addr_from_ai(struct Curl_sockaddr_ex *addr,
+                                  const struct Curl_addrinfo *ai,
+                                  uint8_t transport);
 
 /*
  * Create a socket based on info from 'conn' and 'ai'.
@@ -73,23 +58,13 @@ CURLcode Curl_socket_open(struct Curl_easy *data,
                           uint8_t transport,
                           curl_socket_t *sockfd);
 
+#ifdef USE_SO_NOSIGPIPE
+/* Set SO_NOSIGPIPE on socket, return < 0 on error. */
+int Curl_sock_nosigpipe(curl_socket_t sockfd);
+#endif
+
 int Curl_socket_close(struct Curl_easy *data, struct connectdata *conn,
                       curl_socket_t sock);
-
-#ifdef USE_WINSOCK
-/* When you run a program that uses the Windows Sockets API, you may
-   experience slow performance when you copy data to a TCP server.
-
-   https://learn.microsoft.com/troubleshoot/windows-server/networking/slow-performance-copy-data-tcp-server-sockets-api
-
-   Work-around: Make the Socket Send Buffer Size Larger Than the Program Send
-   Buffer Size
-
-*/
-void Curl_sndbuf_init(curl_socket_t sockfd);
-#else
-#define Curl_sndbuf_init(y) Curl_nop_stmt
-#endif
 
 /**
  * Creates a cfilter that opens a TCP socket to the given address
@@ -100,9 +75,13 @@ void Curl_sndbuf_init(curl_socket_t sockfd);
  */
 CURLcode Curl_cf_tcp_create(struct Curl_cfilter **pcf,
                             struct Curl_easy *data,
+                            struct Curl_peer *origin,
+                            struct Curl_peer *peer,
+                            uint8_t transport_peer,
                             struct connectdata *conn,
-                            const struct Curl_addrinfo *ai,
-                            uint8_t transport);
+                            struct Curl_sockaddr_ex *addr,
+                            struct Curl_peer *tunnel_peer,
+                            uint8_t tunnel_transport);
 
 /**
  * Creates a cfilter that opens a UDP socket to the given address
@@ -113,9 +92,13 @@ CURLcode Curl_cf_tcp_create(struct Curl_cfilter **pcf,
  */
 CURLcode Curl_cf_udp_create(struct Curl_cfilter **pcf,
                             struct Curl_easy *data,
+                            struct Curl_peer *origin,
+                            struct Curl_peer *peer,
+                            uint8_t transport_peer,
                             struct connectdata *conn,
-                            const struct Curl_addrinfo *ai,
-                            uint8_t transport);
+                            struct Curl_sockaddr_ex *addr,
+                            struct Curl_peer *tunnel_peer,
+                            uint8_t tunnel_transport);
 
 /**
  * Creates a cfilter that opens a UNIX socket to the given address
@@ -126,16 +109,20 @@ CURLcode Curl_cf_udp_create(struct Curl_cfilter **pcf,
  */
 CURLcode Curl_cf_unix_create(struct Curl_cfilter **pcf,
                              struct Curl_easy *data,
+                             struct Curl_peer *origin,
+                             struct Curl_peer *peer,
+                             uint8_t transport_peer,
                              struct connectdata *conn,
-                             const struct Curl_addrinfo *ai,
-                             uint8_t transport);
+                             struct Curl_sockaddr_ex *addr,
+                             struct Curl_peer *tunnel_peer,
+                             uint8_t tunnel_transport);
 
 /**
  * Creates a cfilter that keeps a listening socket.
  */
 CURLcode Curl_conn_tcp_listen_set(struct Curl_easy *data,
                                   struct connectdata *conn,
-                                  int sockindex,
+                                  int8_t sockindex,
                                   curl_socket_t *s);
 
 /**
@@ -143,7 +130,7 @@ CURLcode Curl_conn_tcp_listen_set(struct Curl_easy *data,
  * Curl_conn_tcp_listen_set().
  */
 bool Curl_conn_is_tcp_listen(struct Curl_easy *data,
-                             int sockindex);
+                             int8_t sockindex);
 
 /**
  * Peek at the socket and remote ip/port the socket filter is using.

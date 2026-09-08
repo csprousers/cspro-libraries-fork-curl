@@ -55,8 +55,8 @@ static void voutf(const char *prefix, const char *fmt, va_list ap)
         cut--;
       }
       if(cut == 0)
-        /* not a single cutting position was found, just cut it at the
-           max text width then! */
+        /* not a single cutting position was found, cut it at the max text
+           width then! */
         cut = width - 1;
 
       (void)fwrite(ptr, cut + 1, 1, tool_stderr);
@@ -74,11 +74,11 @@ static void voutf(const char *prefix, const char *fmt, va_list ap)
 
 /*
  * Emit 'note' formatted message on configured 'errors' stream, if verbose was
- * selected.
+ * selected and mute (--silent) was not.
  */
 void notef(const char *fmt, ...)
 {
-  if(global->tracetype) {
+  if(global && global->tracetype && !global->silent) {
     va_list ap;
     va_start(ap, fmt);
     voutf(NOTE_PREFIX, fmt, ap);
@@ -92,7 +92,7 @@ void notef(const char *fmt, ...)
  */
 void warnf(const char *fmt, ...)
 {
-  if(!global->silent) {
+  if(!global || !global->silent) {
     va_list ap;
     va_start(ap, fmt);
     voutf(WARN_PREFIX, fmt, ap);
@@ -128,7 +128,7 @@ void helpf(const char *fmt, ...)
  */
 void errorf(const char *fmt, ...)
 {
-  if(!global->silent || global->showerror) {
+  if(!global || !global->silent || global->showerror) {
     va_list ap;
     va_start(ap, fmt);
     voutf(ERROR_PREFIX, fmt, ap);

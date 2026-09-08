@@ -34,11 +34,8 @@
  * warning: conversion to 'long unsigned int' from 'curl_socket_t' {aka 'int'}
  * may change the sign of the result [-Wsign-conversion]
  */
-#ifdef __GNUC__
+#ifdef __GNUC__  /* keep outside functions and without push/pop for GCC <4.6 */
 #pragma GCC diagnostic ignored "-Wsign-conversion"
-#ifdef __DJGPP__
-#pragma GCC diagnostic ignored "-Warith-conversion"
-#endif
 #elif defined(_MSC_VER)
 #pragma warning(disable:4127)  /* conditional expression is constant */
 #endif
@@ -80,11 +77,11 @@ int main(void)
 {
   CURL *curl;
   /* Minimalistic http request */
-  const char *request = "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n";
-  size_t request_len = strlen(request);
+  static const char request[] = "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n";
+  static const size_t request_len = sizeof(request) - 1;
 
   CURLcode result = curl_global_init(CURL_GLOBAL_ALL);
-  if(result)
+  if(result != CURLE_OK)
     return (int)result;
 
   /* A general note of caution here: if you are using curl_easy_recv() or
@@ -92,8 +89,7 @@ int main(void)
      supports "natively", you are doing it wrong and you should stop.
 
      This example uses HTTP only to show how to use this API, it does not
-     suggest that writing an application doing this is sensible.
-  */
+     suggest that writing an application doing this is sensible. */
 
   curl = curl_easy_init();
   if(curl) {
@@ -128,7 +124,7 @@ int main(void)
       do {
         nsent = 0;
         result = curl_easy_send(curl, request + nsent_total,
-                             request_len - nsent_total, &nsent);
+                                request_len - nsent_total, &nsent);
         nsent_total += nsent;
 
         if(result == CURLE_AGAIN && !wait_on_socket(sockfd, 0, 60000L)) {

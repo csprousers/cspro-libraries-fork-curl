@@ -54,7 +54,7 @@ int main(void)
   FILE *fd;
 
   result = curl_global_init(CURL_GLOBAL_ALL);
-  if(result)
+  if(result != CURLE_OK)
     return (int)result;
 
   fd = fopen("debugit", "rb"); /* open file to upload */
@@ -64,7 +64,7 @@ int main(void)
   }
 
   /* to get the file size */
-  if(fstat(fileno(fd), &file_info) != 0) {
+  if(fstat(fileno(fd), &file_info)) {
     fclose(fd);
     curl_global_cleanup();
     return 1; /* cannot continue */

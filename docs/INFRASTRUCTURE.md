@@ -64,7 +64,7 @@ us free of charge.
 
 ## CodeSonar
 
-[CodeSonar](https://codesecure.com/our-products/codesonar/) analyzes the curl
+[CodeSonar](https://www.adacore.com/codesonar) analyzes the curl
 source code daily and emails Daniel Stenberg whenever it finds suspected
 problems in the source code. I hope and expect that we can invite other
 maintainers to access these reports soon.
@@ -90,7 +90,7 @@ thus take up to 20 minutes until it takes effect on the origin server.
 The content on `curl.dev` is available and managed at
 https://github.com/curl/curl.dev/
 
-The content on `everything-curl.dev` is available and managed at
+The content on `everything.curl.dev` is available and managed at
 https://github.com/curl/everything-curl/
 
 The machine hosting the website contents for these three sites is owned by
@@ -139,7 +139,7 @@ anycast access to the site. Should be snappy from virtually everywhere across
 the globe.
 
 The CDN servers support HTTP/1, HTTP/2 and HTTP/3. They set HSTS for a year.
-The `HTTP://` version of the site redirects to `HTTPS://`.
+The `http://` version of the site redirects to `https://`.
 
 Fastly manages the TLS certificates from Let's Encrypt for the servers they
 run on the behalf of curl.
@@ -172,14 +172,6 @@ instances used for this.
 We use a few rare additional curl related email aliases in the curl domains.
 They go through the mail server `mail.haxx.se` maintained by Daniel Stenberg
 
-## Bug-bounty
-
-We run a [bug-bounty](https://curl.se/docs/bugbounty.html) on HackerOne. The
-setup runs entirely at https://hackerone.com/curl.
-
-The money part for the bug bounty is sponsored by the [Internet Bug
-Bounty](https://hackerone.com/ibb).
-
 ## Open Collective
 
 We use [Open Collective](https://opencollective.com/curl) as our "fiscal
@@ -199,7 +191,7 @@ chat about curl and related topics. This done in the `#curl` channel on the
 `libra.chat` IRC network. **Daniel Stenberg** (`bagder`) is registered owner
 of the channel. We do not run any IRC servers or services ourselves.
 
-`curelbot` is a service in the channel that shows details about GitHub issues
+`curlbot` is a service in the channel that shows details about GitHub issues
 and pull requests when publicly mentioned using #[number]. The bot is run by
 user `TheAssassin`.
 

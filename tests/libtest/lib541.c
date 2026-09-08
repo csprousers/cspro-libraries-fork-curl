@@ -34,7 +34,7 @@ static CURLcode test_lib541(const char *URL)
   char errbuf[STRERROR_LEN];
   FILE *hd_src;
   int hd;
-  struct_stat file_info;
+  curlx_struct_stat file_info;
 
   if(!libtest_arg2) {
     curl_mfprintf(stderr, "Usage: <url> <file-to-upload>\n");
@@ -50,7 +50,7 @@ static CURLcode test_lib541(const char *URL)
   }
 
   /* get the file size of the local file */
-  hd = fstat(fileno(hd_src), &file_info);
+  hd = curlx_fstat(fileno(hd_src), &file_info);
   if(hd == -1) {
     /* cannot open file, bail out */
     curl_mfprintf(stderr, "fstat() failed with error (%d) %s\n",
@@ -82,16 +82,16 @@ static CURLcode test_lib541(const char *URL)
   }
 
   /* enable uploading */
-  test_setopt(curl, CURLOPT_UPLOAD, 1L);
+  easy_setopt(curl, CURLOPT_UPLOAD, 1L);
 
   /* enable verbose */
-  test_setopt(curl, CURLOPT_VERBOSE, 1L);
+  easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
   /* specify target */
-  test_setopt(curl, CURLOPT_URL, URL);
+  easy_setopt(curl, CURLOPT_URL, URL);
 
   /* now specify which file to upload */
-  test_setopt(curl, CURLOPT_READDATA, hd_src);
+  easy_setopt(curl, CURLOPT_READDATA, hd_src);
 
   /* Now run off and do what you have been told! */
   result = curl_easy_perform(curl);

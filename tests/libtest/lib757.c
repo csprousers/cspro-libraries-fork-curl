@@ -23,23 +23,15 @@
  ***************************************************************************/
 #include "first.h"
 
-/* write callback that does nothing */
-static size_t write_757(char *ptr, size_t size, size_t nmemb, void *userdata)
-{
-  (void)ptr;
-  (void)userdata;
-  return size * nmemb;
-}
-
-#define DATA757 "<title>fun-times</title>"
-#define DATALEN (sizeof(DATA757) - 1)
+static const char t757_data[] = "<title>fun-times</title>";
+static const size_t t757_datalen = CURL_CSTRLEN(t757_data);
 
 static size_t read_757(char *buffer, size_t size, size_t nitems, void *arg)
 {
   (void)arg;
-  if((size * nitems) >= DATALEN) {
-    memcpy(buffer, DATA757, DATALEN);
-    return DATALEN;
+  if((size * nitems) >= t757_datalen) {
+    memcpy(buffer, t757_data, t757_datalen);
+    return t757_datalen;
   }
   return 0;
 }
@@ -72,18 +64,18 @@ static CURLcode test_lib757(const char *URL)
   curl = curl_easy_init();
 
   /* First set the URL that is about to receive our POST. */
-  test_setopt(curl, CURLOPT_URL, URL);
+  easy_setopt(curl, CURLOPT_URL, URL);
 
   /* get verbose debug output please */
-  test_setopt(curl, CURLOPT_VERBOSE, 1L);
+  easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
   /* Do not write anything. */
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_757);
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, tutil_throwaway_cb);
 
   /* Build the first mime structure. */
   mime1 = curl_mime_init(curl);
   part = curl_mime_addpart(mime1);
-  curl_mime_data_cb(part, DATALEN, read_757, seek_757, NULL, NULL);
+  curl_mime_data_cb(part, t757_datalen, read_757, seek_757, NULL, NULL);
   curl_mime_type(part, "text/html");
   curl_mime_name(part, "data");
 
@@ -109,7 +101,7 @@ static CURLcode test_lib757(const char *URL)
     result = curl_mime_subparts(part, mime1);
 
     if(result != CURLE_OK)
-      curl_mfprintf(stderr, "curl_mime_subparts() failed: %sn",
+      curl_mfprintf(stderr, "curl_mime_subparts() failed: %s\n",
                     curl_easy_strerror(result));
     else {
       mime1 = NULL;

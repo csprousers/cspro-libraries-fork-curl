@@ -38,23 +38,25 @@ my %file;
 my %docs;
 
 # we may get the directory root pointed out
-my $root=$ARGV[0] || ".";
-my $DOCS="CURL-DISABLE.md";
+my $root = $ARGV[0] || ".";
+my $DOCS = "CURL-DISABLE.md";
 
 sub scanconf {
-    my ($f)=@_;
-    open S, "<$f";
+    my ($f) = @_;
+    open(S, "<", $f);
     while(<S>) {
         if(/(CURL_DISABLE_[A-Z0-9_]+)/g) {
-            my ($sym)=($1);
-            $disable{$sym} = 1;
+            my ($sym) = ($1);
+            if(not $sym =~ /^(CURL_DISABLE_TYPECHECK)$/) {
+                $disable{$sym} = 1;
+            }
         }
     }
     close S;
 }
 
 sub scan_configure {
-    opendir(my $m, "$root/m4") || die "Cannot opendir $root/m4: $!";
+    opendir(my $m, "$root/m4") or die "Cannot opendir $root/m4: $!";
     my @m4 = grep { /\.m4$/ } readdir($m);
     closedir $m;
     scanconf("$root/configure.ac");
@@ -65,12 +67,12 @@ sub scan_configure {
 }
 
 sub scanconf_cmake {
-    my ($hashr, $f)=@_;
-    open S, "<$f";
+    my ($hashr, $f) = @_;
+    open(S, "<", $f);
     while(<S>) {
         if(/(CURL_DISABLE_[A-Z0-9_]+)/g) {
-            my ($sym)=($1);
-            if(not $sym =~ /^(CURL_DISABLE_INSTALL|CURL_DISABLE_SRP)$/) {
+            my ($sym) = ($1);
+            if(not $sym =~ /^(CURL_DISABLE_INSTALL|CURL_DISABLE_TYPECHECK)$/) {
                 $hashr->{$sym} = 1;
             }
         }
@@ -86,14 +88,17 @@ sub scan_cmake_config_h {
     scanconf_cmake(\%disable_cmake_config_h, "$root/lib/curl_config-cmake.h.in");
 }
 
-my %whitelisted = ('CURL_DISABLE_DEPRECATION' => 1);
+my %whitelisted = (
+  'CURL_DISABLE_DEPRECATION' => 1,
+  'CURL_DISABLE_TYPECHECK' => 1,
+);
 
 sub scan_file {
-    my ($source)=@_;
-    open F, "<$source";
+    my ($source) = @_;
+    open(F, "<", $source);
     while(<F>) {
         while(s/(CURL_DISABLE_[A-Z0-9_]+)//) {
-            my ($sym)=($1);
+            my ($sym) = ($1);
 
             if(!$whitelisted{$sym}) {
                 $file{$sym} = $source;
@@ -104,8 +109,8 @@ sub scan_file {
 }
 
 sub scan_dir {
-    my ($dir)=@_;
-    opendir(my $dh, $dir) || die "Cannot opendir $dir: $!";
+    my ($dir) = @_;
+    opendir(my $dh, $dir) or die "Cannot opendir $dir: $!";
     my @cfiles = grep { /\.[ch]\z/ && -f "$dir/$_" } readdir($dh);
     closedir $dh;
     for my $f (sort @cfiles) {
@@ -122,13 +127,15 @@ sub scan_sources {
 }
 
 sub scan_docs {
-    open F, "<$root/docs/$DOCS";
+    open(F, "<", "$root/docs/$DOCS");
     my $line = 0;
     while(<F>) {
         $line++;
         if(/^## `(CURL_DISABLE_[A-Z0-9_]+)`/g) {
-            my ($sym)=($1);
-            $docs{$sym} = $line;
+            my ($sym) = ($1);
+            if(not $sym =~ /^(CURL_DISABLE_TYPECHECK)$/) {
+                $docs{$sym} = $line;
+            }
         }
     }
     close F;

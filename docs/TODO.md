@@ -19,12 +19,6 @@ document](https://curl.se/docs/knownbugs.html) are subject for fixing.
 
 # libcurl
 
-## Consult `%APPDATA%` also for `.netrc`
-
-`%APPDATA%\.netrc` is not considered when running on Windows. Should not it?
-
-See [curl issue 4016](https://github.com/curl/curl/issues/4016)
-
 ## `struct lifreq`
 
 Use `struct lifreq` and `SIOCGLIFADDR` instead of `struct ifreq` and
@@ -57,7 +51,7 @@ to share data in more powerful ways.
 ## updated DNS server while running
 
 If `/etc/resolv.conf` gets updated while a program using libcurl is running, it
-is may cause name resolves to fail unless `res_init()` is called. We should
+may cause name resolves to fail unless `res_init()` is called. We should
 consider calling `res_init()` + retry once unconditionally on all name resolve
 failures to mitigate against this. Firefox works like that. Note that Windows
 does not have `res_init()` or an alternative.
@@ -67,10 +61,10 @@ does not have `res_init()` or an alternative.
 ## c-ares and CURLOPT_OPENSOCKETFUNCTION
 
 curl creates most sockets via the CURLOPT_OPENSOCKETFUNCTION callback and
-close them with the CURLOPT_CLOSESOCKETFUNCTION callback. However, c-ares does
-not use those functions and instead opens and closes the sockets itself. This
-means that when curl passes the c-ares socket to the CURLMOPT_SOCKETFUNCTION
-it is not owned by the application like other sockets.
+close them with the CURLOPT_CLOSESOCKETFUNCTION callback. c-ares does not use
+those functions and instead opens and closes the sockets itself. This means
+that when curl passes the c-ares socket to the CURLMOPT_SOCKETFUNCTION it is
+not owned by the application like other sockets.
 
 See [curl issue 2734](https://github.com/curl/curl/issues/2734)
 
@@ -92,8 +86,8 @@ pings to keep such ones alive even when not actively doing transfers on them.
 
 Given a URL that for example contains spaces, libcurl could have an option
 that would try somewhat harder than it does now and convert spaces to %20 and
-perhaps URL encoded byte values over 128 etc (basically do what the redirect
-following code already does).
+perhaps URL encoded byte values over 128 etc (do what the redirect following
+code already does).
 
 [curl issue 514](https://github.com/curl/curl/issues/514)
 
@@ -269,7 +263,7 @@ This is not detailed in any FTP specification.
 
 ## Passive transfer could try other IP addresses
 
-When doing FTP operations through a proxy at localhost, the reported spotted
+When doing FTP operations through a proxy at localhost, the reporter spotted
 that curl only tried to connect once to the proxy, while it had multiple
 addresses and a failed connect on one address should make it try the next.
 
@@ -283,9 +277,9 @@ See [curl issue 1508](https://github.com/curl/curl/issues/1508)
 ## Provide the error body from a CONNECT response
 
 When curl receives a body response from a CONNECT request to a proxy, it
-always just reads and ignores it. It would make some users happy if curl
-instead optionally would be able to make that responsible available. Via a new
-callback? Through some other means?
+always reads and ignores it. It would make some users happy if curl instead
+optionally would be able to make that response available. Via a new callback?
+Through some other means?
 
 See [curl issue 9513](https://github.com/curl/curl/issues/9513)
 
@@ -330,14 +324,6 @@ For example:
 line.
 
 Additionally this should be implemented for proxy base URLs as well.
-
-## alt-svc should fallback if alt-svc does not work
-
-The `alt-svc:` header provides a set of alternative services for curl to use
-instead of the original. If the first attempted one fails, it should try the
-next etc and if all alternatives fail go back to the original.
-
-See [curl issue 4908](https://github.com/curl/curl/issues/4908)
 
 ## Require HTTP version X or higher
 
@@ -417,17 +403,17 @@ capabilities returned from the CAPABILITY command.
 ## SASL based authentication mechanisms
 
 Currently the LDAP module only supports `ldap_simple_bind_s()` in order to
-bind to an LDAP server. However, this function sends username and password
-details using the simple authentication mechanism (as clear text). However, it
-should be possible to use `ldap_bind_s()` instead specifying the security
-context information ourselves.
+bind to an LDAP server. This function sends username and password details
+using the simple authentication mechanism (as clear text). It should be
+possible to use `ldap_bind_s()` instead specifying the security context
+information ourselves.
 
 ## `CURLOPT_SSL_CTX_FUNCTION` for LDAPS
 
 `CURLOPT_SSL_CTX_FUNCTION` works perfectly for HTTPS and email protocols, but
 it has no effect for LDAPS connections.
 
- [curl issue 4108](https://github.com/curl/curl/issues/4108)
+[curl issue 4108](https://github.com/curl/curl/issues/4108)
 
 ## Paged searches on LDAP server
 
@@ -439,37 +425,18 @@ LDAPS not possible with macOS and Windows with Certificate-Based Authentication
 
 [curl issue 9641](https://github.com/curl/curl/issues/9641)
 
-# SMB
+# WebSocket
 
-## Support modern versions
+## Support text frames with command line tool
 
-curl only supports version 1, which barely anyone is using anymore.
+libcurl defaults to using binary WebSocket frames, which makes some servers
+not work as they require text. We should make it possible to tell the tool to
+use text frames.
 
-## File listing support
+[curl issue 21997](https://github.com/curl/curl/issues/21997)
 
-Add support for listing the contents of an SMB share. The output should
-probably be the same as/similar to FTP.
-
-## Honor file timestamps
-
-The timestamp of the transferred file should reflect that of the original
-file.
-
-## Use NTLMv2
-
-Currently the SMB authentication uses NTLMv1.
-
-## Create remote directories
-
-Support for creating remote directories when uploading a file to a directory
-that does not exist on the server, just like `--ftp-create-dirs`.
-
-# FILE
-
-## Directory listing on non-POSIX
-
-Listing the contents of a directory accessed with FILE only works on platforms
-with `opendir()`. Support could be added for more systems, like Windows.
+An abandoned attempt to add support for this exists in [PR
+22093](https://github.com/curl/curl/pull/22093).
 
 # TLS
 
@@ -504,20 +471,6 @@ For TLS 1.2, the binding type is usually `tls-unique`, and for TLS 1.3 it is
 By changing the order of TLS extensions provided in the TLS handshake, it is
 sometimes possible to circumvent TLS fingerprinting by servers. The TLS
 extension order is of course not the only way to fingerprint a client.
-
-## Consider OCSP stapling by default
-
-Treat a negative response a reason for aborting the connection. Since OCSP
-stapling is presumed to get used much less in the future when Let's Encrypt
-drops the OCSP support, the benefit of this might however be limited.
-
-[curl issue 15483](https://github.com/curl/curl/issues/15483)
-
-## Provide callback for cert verification
-
-OpenSSL supports a callback for customized verification of the peer
-certificate, but this does not seem to be exposed in the libcurl APIs. Could
-it be? There is so much that could be done if it were.
 
 ## Less memory massaging with Schannel
 
@@ -598,6 +551,10 @@ The feature matrix at https://curl.se/libcurl/c/tls-options.html shows which
 features are supported by which TLS backends, and thus also where there are
 feature gaps.
 
+## ECH for QUIC
+
+curl's support for ECH is currently limited to TCP only.
+
 # Proxy
 
 ## Retry SOCKS handshake on address type not supported
@@ -670,8 +627,8 @@ the new transfer to the existing one.
 The SFTP code in libcurl checks the file size *before* a transfer starts and
 then proceeds to transfer exactly that amount of data. If the remote file
 grows while the transfer is in progress libcurl does not notice and does not
-adapt. The OpenSSH SFTP command line tool does and libcurl could also just
-attempt to download more to see if there is more to get...
+adapt. The OpenSSH SFTP command line tool does and libcurl could also attempt
+to download more to see if there is more to get...
 
 [curl issue 4344](https://github.com/curl/curl/issues/4344)
 
@@ -695,7 +652,7 @@ until [curl pull request 6021](https://github.com/curl/curl/pull/6021) brought
 the functionality with the libssh2 backend. Presumably, this support can/could
 be added for the libssh backend as well.
 
-## SFTP with `SCP://`
+## SFTP with `scp://`
 
 OpenSSH 9 switched their `scp` tool to speak SFTP under the hood. Going
 forward it might be worth having curl or libcurl attempt SFTP if SCP fails to
@@ -745,10 +702,10 @@ RFC 6266 documents how UTF-8 names can be passed to a client in the
 
 [curl issue 1888](https://github.com/curl/curl/issues/1888)
 
-## Option to make `-Z` merge lined based outputs on stdout
+## Option to make `-Z` merge line-based outputs on stdout
 
-When a user requests multiple lined based files using `-Z` and sends them to
-stdout, curl does not *merge* and send complete lines fine but may send
+When a user requests multiple line-based files using `-Z` and sends them to
+stdout, curl does not *merge* and send complete lines but may send
 partial lines from several sources.
 
 [curl issue 5175](https://github.com/curl/curl/issues/5175)
@@ -783,7 +740,7 @@ backed up from those that are either not ready or have not changed.
 
 Downloads in progress are neither ready to be backed up, nor should they be
 opened by a different process. Only after a download has been completed it is
-sensible to include it in any integer snapshot or backup of the system.
+sensible to include it in any incremental snapshot or backup of the system.
 
 See [curl issue 3354](https://github.com/curl/curl/issues/3354)
 
@@ -799,7 +756,7 @@ done, and thus maintain its connection pool, DNS cache and more.
 
 Consider a command line option that can make curl do multiple serial requests
 while acknowledging server specified [rate
-limits](https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/).
+limits](https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-ratelimit-headers/).
 
 See [curl issue 5406](https://github.com/curl/curl/issues/5406)
 
@@ -818,25 +775,6 @@ possible) so that it does not have to transfer the same data again that was
 already transferred before the retry.
 
 See [curl issue 1084](https://github.com/curl/curl/issues/1084)
-
-## consider filename from the redirected URL with `-O` ?
-
-When a user gives a URL and uses `-O`, and curl follows a redirect to a new
-URL, the filename is not extracted and used from the newly redirected-to URL
-even if the new URL may have a much more sensible filename.
-
-This is clearly documented and helps for security since there is no surprise
-to users which filename that might get overwritten, but maybe a new option
-could allow for this or maybe `-J` should imply such a treatment as well as
-`-J` already allows for the server to decide what filename to use so it
-already provides the "may overwrite any file" risk.
-
-This is extra tricky if the original URL has no filename part at all since
-then the current code path does error out with an error message, and we cannot
-*know* already at that point if curl is redirected to a URL that has a
-filename...
-
-See [curl issue 1241](https://github.com/curl/curl/issues/1241)
 
 ## retry on network is unreachable
 
@@ -864,7 +802,7 @@ one, which then could make curl decide to rather retry the transfer on that
 URL only instead of the original operation to the original URL.
 
 Perhaps extra emphasized if the original transfer is a large POST that
-redirects to a separate GET, and that GET is what gets the 529
+redirects to a separate GET, and that GET is what gets the 429
 
 See [curl issue 5462](https://github.com/curl/curl/issues/5462)
 
@@ -907,12 +845,11 @@ See [curl issue 6150](https://github.com/curl/curl/issues/6150)
 ## `-J` and `-O` with %-encoded filenames
 
 `-J`/`--remote-header-name` does not decode %-encoded filenames. RFC 6266
-details how it should be done. The can of worm is basically that we have no
-charset handling in curl and ASCII >=128 is a challenge for us. Not to mention
-that decoding also means that we need to check for nastiness that is
-attempted, like `../` sequences and the like. Probably everything to the left
-of any embedded slashes should be cut off. See
-https://curl.se/bug/view.cgi?id=1294
+details how it should be done. The can of worm is that we have no charset
+handling in curl and ASCII >=128 is a challenge for us. Not to mention that
+decoding also means that we need to check for nastiness that is attempted,
+like `../` sequences and the like. Probably everything to the left of any
+embedded slashes should be cut off. See https://curl.se/bug/view.cgi?id=1294
 
 `-O` also does not decode %-encoded names, and while it has even less
 information about the charset involved the process is similar to the `-J`
@@ -959,7 +896,7 @@ When compiling curl on OpenBSD with `--enable-debug` it gives linking errors
 when you use GNU libtool. This can be fixed by using the libtool provided by
 OpenBSD itself. However for this the user always needs to invoke make with
 `LIBTOOL=/usr/bin/libtool`. It would be nice if the script could have some
-magic to detect if this system is an OpenBSD host and then use the OpenBSD
+logic to detect if this system is an OpenBSD host and then use the OpenBSD
 libtool instead.
 
 See [curl issue 5862](https://github.com/curl/curl/issues/5862)
@@ -985,8 +922,8 @@ test tools built with either OpenSSL or GnuTLS
 
 ## more protocols supported
 
-Extend the test suite to include more protocols. The telnet could just do FTP
-or http operations (for which we have test servers).
+Extend the test suite to include more protocols. The telnet could do FTP or
+http operations (for which we have test servers).
 
 ## more platforms supported
 
@@ -1025,8 +962,6 @@ See [curl issue 4477](https://github.com/curl/curl/issues/4477)
 
 The rate-limiting logic is done in the PERFORMING state in multi.c but MQTT is
 not (yet) implemented to use that.
-
-## Support MQTTS
 
 ## Handle network blocks
 

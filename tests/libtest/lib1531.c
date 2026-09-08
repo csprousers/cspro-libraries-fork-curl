@@ -25,8 +25,8 @@
 
 static CURLcode test_lib1531(const char *URL)
 {
-  static char const testData[] = ".abc\0xyz";
-  static curl_off_t const testDataSize = sizeof(testData) - 1;
+  static const char testdata[] = ".abc\0xyz";
+  static const curl_off_t testdatalen = CURL_CSTRLEN(testdata);
 
   CURL *curl;
   CURLM *multi;
@@ -50,8 +50,8 @@ static CURLcode test_lib1531(const char *URL)
 
   /* set the options (I left out a few, you get the point anyway) */
   curl_easy_setopt(curl, CURLOPT_URL, URL);
-  curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, testDataSize);
-  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, testData);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE_LARGE, testdatalen);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, testdata);
 
   /* we start some action by calling perform right away */
   curl_multi_perform(multi, &still_running);
@@ -128,7 +128,7 @@ static CURLcode test_lib1531(const char *URL)
     msg = curl_multi_info_read(multi, &msgs_left);
     if(msg && msg->msg == CURLMSG_DONE) {
       curl_mprintf("HTTP transfer completed with status %d\n",
-                   msg->data.result);
+                   (int)msg->data.result);
       break;
     }
 

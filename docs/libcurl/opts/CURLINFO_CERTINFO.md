@@ -33,7 +33,7 @@ CURLcode curl_easy_getinfo(CURL *handle, CURLINFO_CERTINFO,
 
 # DESCRIPTION
 
-Pass a pointer to a *struct curl_certinfo ** and it is set to point to a
+Pass a pointer to a `struct curl_certinfo *` and it is set to point to a
 struct that holds info about the server's certificate chain, assuming you had
 CURLOPT_CERTINFO(3) enabled when the request was made.
 
@@ -71,12 +71,12 @@ int main(void)
 
     result = curl_easy_perform(curl);
 
-    if(!result) {
+    if(result == CURLE_OK) {
       int i;
       struct curl_certinfo *ci;
       result = curl_easy_getinfo(curl, CURLINFO_CERTINFO, &ci);
 
-      if(!result) {
+      if(result == CURLE_OK) {
         printf("%d certs!\n", ci->num_of_certs);
 
         for(i = 0; i < ci->num_of_certs; i++) {

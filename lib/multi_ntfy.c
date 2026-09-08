@@ -110,7 +110,7 @@ static void mntfy_chunk_dispatch_all(struct Curl_multi *multi,
       /* only when notification has not been disabled in the meantime */
       if(data && Curl_uint32_bset_contains(&multi->ntfy.enabled, e->type)) {
         /* this may cause new notifications to be added! */
-        CURL_TRC_M(multi->admin, "[NTFY] dispatch %d to xfer %u",
+        CURL_TRC_M(multi->admin, "[NTFY] dispatch %u to xfer %u",
                    e->type, e->mid);
         multi->ntfy.ntfy_cb(multi, e->type, data, multi->ntfy.ntfy_cb_data);
       }
@@ -168,7 +168,7 @@ void Curl_mntfy_add(struct Curl_easy *data, unsigned int type)
      Curl_uint32_bset_contains(&multi->ntfy.enabled, (uint32_t)type)) {
     /* append to list of outstanding notifications */
     struct mntfy_chunk *tail = mntfy_non_full_tail(&multi->ntfy);
-    CURL_TRC_M(data, "[NTFY] add %d for xfer %u", type, data->mid);
+    CURL_TRC_M(data, "[NTFY] add %u for xfer %u", type, data->mid);
     if(tail)
       mntfy_chunk_append(tail, data, (uint32_t)type);
     else
@@ -179,8 +179,13 @@ void Curl_mntfy_add(struct Curl_easy *data, unsigned int type)
 
 CURLMcode Curl_mntfy_dispatch_all(struct Curl_multi *multi)
 {
-  DEBUGASSERT(!multi->in_ntfy_callback);
-  multi->in_ntfy_callback = TRUE;
+  struct Curl_mapi_guard guard;
+
+  if(!multi)
+    return CURLM_BAD_FUNCTION_ARGUMENT;
+
+  CURL_CBAPI_MULTI_START(&guard, multi, multi_ntfy_cb);
+
   while(multi->ntfy.head && !multi->ntfy.failure) {
     struct mntfy_chunk *chunk = multi->ntfy.head;
     /* this may cause new notifications to be added! */
@@ -194,7 +199,8 @@ CURLMcode Curl_mntfy_dispatch_all(struct Curl_multi *multi)
     multi->ntfy.head = chunk->next;
     mnfty_chunk_destroy(chunk);
   }
-  multi->in_ntfy_callback = FALSE;
+
+  CURL_CBAPI_MULTI_END(&guard);
 
   if(multi->ntfy.failure) {
     CURLMcode mresult = multi->ntfy.failure;

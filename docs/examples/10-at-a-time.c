@@ -30,7 +30,7 @@
 
 #include <curl/curl.h>
 
-static const char *urls[] = {
+static const char * const urls[] = {
   "https://01.example/",
   "https://02.example/",
   "https://03.example/",
@@ -107,7 +107,7 @@ int main(void)
   CURLM *multi;
 
   CURLcode result = curl_global_init(CURL_GLOBAL_ALL);
-  if(result)
+  if(result != CURLE_OK)
     return (int)result;
 
   multi = curl_multi_init();
@@ -131,17 +131,17 @@ int main(void)
       /* !checksrc! disable EQUALSNULL 1 */
       while((msg = curl_multi_info_read(multi, &msgs_left)) != NULL) {
         if(msg->msg == CURLMSG_DONE) {
-          char *url;
+          const char *url;
           CURL *curl = msg->easy_handle;
           curl_easy_getinfo(curl, CURLINFO_PRIVATE, &url);
-          fprintf(stderr, "R: %d - %s <%s>\n",
-                  msg->data.result, curl_easy_strerror(msg->data.result), url);
+          fprintf(stderr, "R: %d - %s <%s>\n", (int)msg->data.result,
+                  curl_easy_strerror(msg->data.result), url);
           curl_multi_remove_handle(multi, curl);
           curl_easy_cleanup(curl);
           left--;
         }
         else {
-          fprintf(stderr, "E: CURLMsg (%d)\n", msg->msg);
+          fprintf(stderr, "E: CURLMsg (%d)\n", (int)msg->msg);
         }
         if(transfers < NUM_URLS)
           add_transfer(multi, transfers++, &left);

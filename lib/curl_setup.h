@@ -77,7 +77,7 @@
 
 #if defined(__MINGW32__) && \
   (!defined(__MINGW64_VERSION_MAJOR) || (__MINGW64_VERSION_MAJOR < 3))
-#error "Building curl requires mingw-w64 3.0 or later"
+#error "mingw-w64 3.0 or greater required"
 #endif
 
 /* Visual Studio 2010 is the minimum Visual Studio version we support.
@@ -89,12 +89,8 @@
 #ifdef _MSC_VER
 /* Disable Visual Studio warnings: 4127 "conditional expression is constant" */
 #pragma warning(disable:4127)
-/* Avoid VS2005 and upper complaining about portable C functions. */
-#ifndef _CRT_NONSTDC_NO_DEPRECATE  /* mingw-w64 v2+. MS SDK ~10+/~VS2017+. */
-#define _CRT_NONSTDC_NO_DEPRECATE  /* for close(), fileno(), unlink(), etc. */
-#endif
 #ifndef _CRT_SECURE_NO_WARNINGS
-#define _CRT_SECURE_NO_WARNINGS  /* for getenv(), tests: sscanf() */
+#define _CRT_SECURE_NO_WARNINGS  /* for getenv(), sscanf(), vsnprintf() */
 #endif
 #endif /* _MSC_VER */
 
@@ -110,6 +106,7 @@
 #  ifndef NOGDI
 #  define NOGDI
 #  endif
+
 /* Detect Windows App environment which has a restricted access
  * to the Win32 APIs. */
 #  if (defined(_WIN32_WINNT) && (_WIN32_WINNT >= 0x0602)) || \
@@ -120,6 +117,12 @@
 #      define CURL_WINDOWS_UWP
 #    endif
 #  endif
+
+/* Mandatory to define SECURITY_WIN32 or SECURITY_KERNEL to indicating who is
+   compiling the code. */
+#undef SECURITY_KERNEL
+#undef SECURITY_WIN32
+#define SECURITY_WIN32  /* for <sspi.h> */
 #endif
 
 /* Compatibility */
@@ -146,19 +149,23 @@
 #  include "config-mac.h"
 #endif
 
-#ifdef __riscos__
-#  include "config-riscos.h"
-#endif
-
 #ifdef __OS400__
 #  include "config-os400.h"
 #endif
 
-#ifdef __PLAN9__
-#  include "config-plan9.h"
-#endif
-
 #endif /* HAVE_CONFIG_H */
+
+#ifdef _WIN32
+#  if defined(_WIN32_WINNT) && (_WIN32_WINNT < 0x0600)
+#    error The minimum build target is Windows Vista (0x0600)
+#  endif
+
+#  if !defined(CURL_WINDOWS_UWP) && (defined(_MSC_VER) || defined(__MINGW32__))
+#    ifndef HAVE_IF_NAMETOINDEX
+#    define HAVE_IF_NAMETOINDEX
+#    endif
+#  endif
+#endif
 
 /* ================================================================ */
 /* Definition of preprocessor macros/symbols which modify compiler  */
@@ -171,7 +178,7 @@
 
 #ifdef HAVE_LIBZ
 #  ifndef ZLIB_CONST
-#  define ZLIB_CONST  /* Use z_const. Supported by v1.2.5.2 and upper. */
+#  define ZLIB_CONST  /* Use z_const. Supported by v1.2.5.2 or greater. */
 #  endif
 #endif
 
@@ -208,8 +215,8 @@
 /*  please, do it beyond the point further indicated in this file.  */
 /* ================================================================ */
 
-/* Give calloc a chance to be dragging in early, so we do not redefine */
-#if defined(USE_THREADS_POSIX) && defined(HAVE_PTHREAD_H)
+/* Give calloc a chance to be included early, so we do not redefine */
+#ifdef HAVE_THREADS_POSIX
 #  include <pthread.h>
 #endif
 
@@ -247,9 +254,6 @@
 #  ifndef CURL_DISABLE_RTSP
 #  define CURL_DISABLE_RTSP
 #  endif
-#  ifndef CURL_DISABLE_SMB
-#  define CURL_DISABLE_SMB
-#  endif
 #  ifndef CURL_DISABLE_SMTP
 #  define CURL_DISABLE_SMTP
 #  endif
@@ -259,29 +263,54 @@
 #  ifndef CURL_DISABLE_TFTP
 #  define CURL_DISABLE_TFTP
 #  endif
-#endif
-
-/*
- * When http is disabled rtsp is not supported.
- */
-#if defined(CURL_DISABLE_HTTP) && !defined(CURL_DISABLE_RTSP)
-#  define CURL_DISABLE_RTSP
+#  ifndef CURL_DISABLE_WEBSOCKETS
+#  define CURL_DISABLE_WEBSOCKETS
+#  endif
 #endif
 
 /*
  * When HTTP is disabled, disable HTTP-only features
  */
 #ifdef CURL_DISABLE_HTTP
-#  define CURL_DISABLE_ALTSVC 1
-#  define CURL_DISABLE_COOKIES 1
-#  define CURL_DISABLE_BASIC_AUTH 1
-#  define CURL_DISABLE_BEARER_AUTH 1
-#  define CURL_DISABLE_AWS 1
-#  define CURL_DISABLE_DOH 1
-#  define CURL_DISABLE_FORM_API 1
-#  define CURL_DISABLE_HEADERS_API 1
-#  define CURL_DISABLE_HSTS 1
-#  define CURL_DISABLE_HTTP_AUTH 1
+#  ifndef CURL_DISABLE_ALTSVC
+#  define CURL_DISABLE_ALTSVC
+#  endif
+#  ifndef CURL_DISABLE_AWS
+#  define CURL_DISABLE_AWS
+#  endif
+#  ifndef CURL_DISABLE_BASIC_AUTH
+#  define CURL_DISABLE_BASIC_AUTH
+#  endif
+#  ifndef CURL_DISABLE_BEARER_AUTH
+#  define CURL_DISABLE_BEARER_AUTH
+#  endif
+#  ifndef CURL_DISABLE_COOKIES
+#  define CURL_DISABLE_COOKIES
+#  endif
+#  ifndef CURL_DISABLE_DOH
+#  define CURL_DISABLE_DOH
+#  endif
+#  ifndef CURL_DISABLE_FORM_API
+#  define CURL_DISABLE_FORM_API
+#  endif
+#  ifndef CURL_DISABLE_HEADERS_API
+#  define CURL_DISABLE_HEADERS_API
+#  endif
+#  ifndef CURL_DISABLE_HSTS
+#  define CURL_DISABLE_HSTS
+#  endif
+#  ifndef CURL_DISABLE_HTTPSIG
+#  define CURL_DISABLE_HTTPSIG
+#  endif
+#  ifndef CURL_DISABLE_HTTP_AUTH
+#  define CURL_DISABLE_HTTP_AUTH
+#  endif
+#  ifndef CURL_DISABLE_RTSP
+#  define CURL_DISABLE_RTSP
+#  endif
+#  ifndef CURL_DISABLE_WEBSOCKETS
+#  define CURL_DISABLE_WEBSOCKETS /* no WebSockets without HTTP present */
+#  endif
 #endif
 
 /* ================================================================ */
@@ -331,16 +360,14 @@
 #endif
 
 /* based on logic in "curl/mprintf.h" */
-#if (defined(__GNUC__) || defined(__clang__) ||                         \
-  defined(__IAR_SYSTEMS_ICC__)) &&                                      \
-  defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) &&         \
+#if (defined(__GNUC__) || defined(__clang__) ||                 \
+     defined(__IAR_SYSTEMS_ICC__)) &&                           \
+  defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 199901L) && \
   !defined(CURL_NO_FMT_CHECKS)
 #if defined(__MINGW32__) && !defined(__clang__)
-#define CURL_PRINTF(fmt, arg) \
-  __attribute__((format(gnu_printf, fmt, arg)))
+#define CURL_PRINTF(fmt, arg) __attribute__((format(gnu_printf, fmt, arg)))
 #else
-#define CURL_PRINTF(fmt, arg) \
-  __attribute__((format(__printf__, fmt, arg)))
+#define CURL_PRINTF(fmt, arg) __attribute__((format(__printf__, fmt, arg)))
 #endif
 #else
 #define CURL_PRINTF(fmt, arg)
@@ -358,7 +385,7 @@
    (defined(__GNUC__) && __GNUC__ <= 14)) &&                \
   defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) && \
   !defined(__ENVIRONMENT_OS_VERSION_MIN_REQUIRED__)
-#define __ENVIRONMENT_OS_VERSION_MIN_REQUIRED__             \
+#define __ENVIRONMENT_OS_VERSION_MIN_REQUIRED__ \
   __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__
 #endif
 
@@ -405,7 +432,7 @@
 #    if !(defined(__NEWLIB__) || \
           (defined(__CLIB2__) && defined(__THREAD_SAFE)))
        /* disable threaded resolver with clib2 - requires newlib or clib-ts */
-#      undef USE_THREADS_POSIX
+#      undef USE_RESOLV_THREADED
 #    endif
 #  endif
 #  include <exec/types.h>
@@ -429,7 +456,7 @@
 #    undef HAVE_FCNTL
 #    undef HAVE_FCNTL_O_NONBLOCK
 #  else
-     /* use libc networking and hence close() and fnctl() */
+     /* use libc networking and hence close() and fcntl() */
 #    undef HAVE_CLOSESOCKET_CAMEL
 #    undef HAVE_IOCTLSOCKET_CAMEL
 #  endif
@@ -445,6 +472,10 @@
 #define USE_EVENTFD
 #endif
 
+#ifdef SO_NOSIGPIPE
+#define USE_SO_NOSIGPIPE
+#endif
+
 #include <stdio.h>
 #include <assert.h>
 
@@ -454,43 +485,46 @@
 #  endif
 #endif
 
-#ifndef STDC_HEADERS /* no standard C headers! */
-#include <curl/stdcheaders.h>
+#include <stdint.h>
+#define HAVE_UINTPTR_T  /* assume uintptr_t is provided by stdint.h */
+
+#ifdef __DJGPP__
+/* By default, DJGPP provides this type as a version of 'unsigned long' which
+   forces us to use a define use it in printf() format strings without
+   warnings. long and int are both 32 bits for this platform. */
+#define uint32_t unsigned int
 #endif
 
-#if defined(HAVE_STDINT_H) || defined(USE_WOLFSSL)
-#include <stdint.h>
+/* Disable uintptr_t for targets known to miss it from stdint.h */
+#ifdef __OS400__
+#undef HAVE_UINTPTR_T
 #endif
 
 #include <limits.h>
+/* Include after setting system macros that may affect type sizes
+   (e.g. 'off_t' or 'time_t'), or suppress warnings
+   (e.g. '_CRT_SECURE_NO_WARNINGS`), but before including sys/stat.h */
+#include <sys/types.h>
 
 #ifdef _WIN32
 #  ifdef HAVE_IO_H
 #  include <io.h>
 #  endif
-#  include <sys/types.h>
 #  include <sys/stat.h>
    /* Large file (>2Gb) support using Win32 functions. */
-#  undef  lseek
-#  define lseek(fdes, offset, whence)  _lseeki64(fdes, offset, whence)
-#  undef  fstat
-#  define fstat(fdes, stp)             _fstati64(fdes, stp)
-#  define struct_stat                  struct _stati64
-#  define LSEEK_ERROR                  (__int64)-1
+#  define curl_lseek                      _lseeki64
+#  define LSEEK_ERROR                     ((__int64)-1)
 #elif defined(__DJGPP__)
    /* Requires DJGPP 2.04 */
 #  include <unistd.h>
-#  undef  lseek
-#  define lseek(fdes, offset, whence)  llseek(fdes, offset, whence)
-#  define LSEEK_ERROR                  (offset_t)-1
-#endif
-
-#ifndef struct_stat
-#define struct_stat struct stat
-#endif
-
-#ifndef LSEEK_ERROR
-#define LSEEK_ERROR (off_t)-1
+#  define curl_lseek                      llseek
+#  define LSEEK_ERROR                     ((offset_t)-1)
+#elif defined(__AMIGA__)
+#  define curl_lseek(fd, offset, whence)  lseek(fd, (off_t)(offset), whence)
+#  define LSEEK_ERROR                     ((off_t)-1)
+#else
+#  define curl_lseek                      lseek
+#  define LSEEK_ERROR                     ((off_t)-1)
 #endif
 
 #ifndef SIZEOF_TIME_T
@@ -500,7 +534,7 @@
 
 #ifndef SIZEOF_CURL_SOCKET_T
 /* configure and cmake check and set the define */
-#  ifdef _WIN64
+#  if defined(USE_WINSOCK) && defined(_WIN64)
 #    define SIZEOF_CURL_SOCKET_T 8
 #  else
 /* default guess */
@@ -509,12 +543,12 @@
 #endif
 
 #if SIZEOF_CURL_SOCKET_T < 8
-#ifdef _WIN32
+#ifdef USE_WINSOCK
 #  define FMT_SOCKET_T "u"
 #else
 #  define FMT_SOCKET_T "d"
 #endif
-#elif defined(_WIN32)
+#elif defined(USE_WINSOCK)
 #  define FMT_SOCKET_T "zu"
 #else
 #  define FMT_SOCKET_T "qd"
@@ -547,7 +581,7 @@
 #  endif
 #endif
 
-#if (SIZEOF_CURL_OFF_T < 8)
+#if SIZEOF_CURL_OFF_T < 8
 #error "too small curl_off_t"
 #else
    /* assume SIZEOF_CURL_OFF_T == 8 */
@@ -558,7 +592,7 @@
 #define FMT_OFF_T  CURL_FORMAT_CURL_OFF_T
 #define FMT_OFF_TU CURL_FORMAT_CURL_OFF_TU
 
-#if (SIZEOF_TIME_T == 4)
+#if SIZEOF_TIME_T == 4
 #  ifdef HAVE_TIME_T_UNSIGNED
 #  define TIME_T_MAX UINT_MAX
 #  define TIME_T_MIN 0
@@ -640,6 +674,16 @@
 
 #endif /* _WIN32 */
 
+/* We want to use mutex when available. */
+#if defined(HAVE_THREADS_POSIX) || defined(_WIN32)
+#define USE_MUTEX
+#endif
+
+/* threaded resolver is the only feature requiring threads. */
+#ifdef USE_RESOLV_THREADED
+#define USE_THREADS
+#endif
+
 /* ---------------------------------------------------------------- */
 /*             resolver specialty compile-time defines              */
 /*         CURLRES_* defines to use in the host*.c sources          */
@@ -657,13 +701,11 @@
 #  define CURLRES_IPV4
 #endif
 
-#if defined(USE_THREADS_POSIX) || defined(USE_THREADS_WIN32)
+#ifdef USE_RESOLV_THREADED
 #  define CURLRES_ASYNCH
-#  define CURLRES_THREADED
-#elif defined(USE_ARES)
+#elif defined(USE_RESOLV_ARES)
 #  define CURLRES_ASYNCH
-#  define CURLRES_ARES
-/* now undef the stock libc functions just to avoid them being used */
+/* now undef the stock libc functions to avoid them being used */
 #  undef HAVE_GETADDRINFO
 #  undef HAVE_FREEADDRINFO
 #else
@@ -683,20 +725,14 @@
 #endif
 
 #if defined(USE_GNUTLS) || defined(USE_OPENSSL) || defined(USE_MBEDTLS) || \
-  defined(USE_WOLFSSL) || defined(USE_SCHANNEL) || \
-  defined(USE_RUSTLS)
+  defined(USE_WOLFSSL) || defined(USE_SCHANNEL) || defined(USE_RUSTLS)
 #define USE_SSL    /* SSL support has been enabled */
 #endif
 
 #if defined(USE_OPENSSL) && defined(USE_WOLFSSL)
-#  include <wolfssl/version.h>
-#  if LIBWOLFSSL_VERSION_HEX >= 0x05007006
-#    ifndef OPENSSL_COEXIST
-#    define OPENSSL_COEXIST
-#    endif
-#  else
-#    error "OpenSSL can only coexist with wolfSSL v5.7.6 or upper"
-#  endif
+#ifndef OPENSSL_COEXIST
+#define OPENSSL_COEXIST
+#endif
 #endif
 
 #if defined(USE_WOLFSSL) && defined(USE_GNUTLS)
@@ -705,24 +741,24 @@
 #endif
 
 /* Single point where USE_SPNEGO definition might be defined */
-#if !defined(CURL_DISABLE_NEGOTIATE_AUTH) && \
-    (defined(HAVE_GSSAPI) || defined(USE_WINDOWS_SSPI))
+#if !defined(CURL_DISABLE_NEGOTIATE_AUTH) &&          \
+  (defined(HAVE_GSSAPI) || defined(USE_WINDOWS_SSPI))
 #define USE_SPNEGO
 #endif
 
 /* Single point where USE_KERBEROS5 definition might be defined */
-#if !defined(CURL_DISABLE_KERBEROS_AUTH) && \
-    (defined(HAVE_GSSAPI) || defined(USE_WINDOWS_SSPI))
+#if !defined(CURL_DISABLE_KERBEROS_AUTH) &&           \
+  (defined(HAVE_GSSAPI) || defined(USE_WINDOWS_SSPI))
 #define USE_KERBEROS5
 #endif
 
 /* Single point where USE_NTLM definition might be defined */
-#ifndef CURL_DISABLE_NTLM
-#  if (defined(USE_OPENSSL) && defined(HAVE_DES_ECB_ENCRYPT)) ||        \
-  defined(USE_GNUTLS) ||                                                \
-  (defined(USE_MBEDTLS) && defined(HAVE_MBEDTLS_DES_CRYPT_ECB)) ||      \
-  defined(USE_OS400CRYPTO) || defined(USE_WIN32_CRYPTO) ||              \
-  (defined(USE_WOLFSSL) && defined(HAVE_WOLFSSL_DES_ECB_ENCRYPT))
+#ifdef CURL_ENABLE_NTLM
+#  if (defined(USE_OPENSSL) && defined(HAVE_DES_ECB_ENCRYPT)) ||   \
+  defined(USE_GNUTLS) ||                                           \
+  (defined(USE_MBEDTLS) && defined(HAVE_MBEDTLS_DES_CRYPT_ECB)) || \
+  defined(USE_OS400CRYPTO) || defined(USE_WIN32_CRYPTO) ||         \
+  (defined(USE_WOLFSSL) && defined(HAVE_WC_DES_ECBENCRYPT))
 #    define USE_CURL_NTLM_CORE
 #  endif
 #  if defined(USE_CURL_NTLM_CORE) || defined(USE_WINDOWS_SSPI)
@@ -732,6 +768,16 @@
 
 #if defined(USE_LIBSSH2) || defined(USE_LIBSSH)
 #define USE_SSH
+#endif
+
+/* GCC <4.6 does not support '#pragma GCC diagnostic push' and does not support
+   'pragma GCC diagnostic' inside functions.
+   Use CURL_HAVE_DIAG to guard the above in the curl codebase, instead of
+   defined(__GNUC__) || defined(__clang__).
+ */
+#if defined(__clang__) || (defined(__GNUC__) && \
+  ((__GNUC__ > 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ >= 6))))
+#define CURL_HAVE_DIAG
 #endif
 
 /*
@@ -764,20 +810,352 @@
 /* fallthrough attribute */
 
 #ifndef FALLTHROUGH
-#if (defined(__GNUC__) && __GNUC__ >= 7) || \
-    (defined(__clang__) && __clang_major__ >= 10)
+#if (defined(__GNUC__) && __GNUC__ >= 7) ||     \
+  (defined(__clang__) && __clang_major__ >= 10)
 #  define FALLTHROUGH()  __attribute__((fallthrough))
 #else
-#  define FALLTHROUGH()  do {} while (0)
+#  define FALLTHROUGH()  do {} while(0)
 #endif
 #endif
 
 /*
- * Include macros and defines that should only be processed once.
+ * Inclusion of common header files.
  */
-#ifndef HEADER_CURL_SETUP_ONCE_H
-#include "curl_setup_once.h"
+
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
+#include <time.h>
+#include <errno.h>
+
+#include <sys/stat.h>
+
+#if !defined(_WIN32) || defined(__MINGW32__)
+#include <sys/time.h>
 #endif
+
+#ifdef HAVE_IO_H
+#include <io.h>
+#endif
+
+#ifdef HAVE_FCNTL_H
+#include <fcntl.h>
+#endif
+
+#if defined(HAVE_STDBOOL_H) && defined(HAVE_BOOL_T)
+#include <stdbool.h>
+#endif
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
+/* Macro to strip 'const' without triggering a compiler warning.
+   Use it for APIs that do not or cannot support the const qualifier. */
+#ifdef HAVE_UINTPTR_T
+#define CURL_UNCONST(p) ((void *)(uintptr_t)(const void *)(p))
+#else
+#define CURL_UNCONST(p) ((void *)(p))  /* Fall back to simple cast */
+#endif
+
+#ifdef USE_SCHANNEL
+/* Must set this before <schannel.h> is included directly or indirectly by
+   another Windows header. */
+#  define SCHANNEL_USE_BLACKLISTS  /* for SCH_CREDENTIALS */
+#  include <subauth.h>  /* for [P]UNICODE_STRING in SCH_CREDENTIALS */
+#endif
+
+#ifdef __hpux
+#  if !defined(_XOPEN_SOURCE_EXTENDED) || defined(_KERNEL)
+#    ifdef _APP32_64BIT_OFF_T
+#      define OLD_APP32_64BIT_OFF_T _APP32_64BIT_OFF_T
+#      undef _APP32_64BIT_OFF_T
+#    else
+#      undef OLD_APP32_64BIT_OFF_T
+#    endif
+#  endif
+#endif
+
+#ifndef _WIN32
+#include <sys/socket.h>  /* also for MSG_NOSIGNAL */
+#endif
+
+#include "functypes.h"
+
+#ifdef __hpux
+#  if !defined(_XOPEN_SOURCE_EXTENDED) || defined(_KERNEL)
+#    ifdef OLD_APP32_64BIT_OFF_T
+#      define _APP32_64BIT_OFF_T OLD_APP32_64BIT_OFF_T
+#      undef OLD_APP32_64BIT_OFF_T
+#    endif
+#  endif
+#endif
+
+/*
+ * Definition of timeval struct for platforms that do not have it.
+ */
+#ifndef HAVE_STRUCT_TIMEVAL
+struct timeval {
+  long tv_sec;
+  long tv_usec;
+};
+#endif
+
+/*
+ * If we have the MSG_NOSIGNAL define, make sure we use
+ * it as the fourth argument of function send()
+ */
+#ifdef MSG_NOSIGNAL
+#define SEND_4TH_ARG MSG_NOSIGNAL
+#else
+#define SEND_4TH_ARG 0
+#endif
+
+#ifdef __minix
+/* Minix does not support recv on TCP sockets */
+#define sread(x, y, z) (ssize_t)read((RECV_TYPE_ARG1)(x), \
+                                     (RECV_TYPE_ARG2)(y), \
+                                     (RECV_TYPE_ARG3)(z))
+
+#elif defined(HAVE_RECV)
+/*
+ * The definitions for the return type and arguments types
+ * of functions recv() and send() belong and come from the
+ * configuration file. Do not define them in any other place.
+ *
+ * HAVE_RECV is defined if you have a function named recv()
+ * which is used to read incoming data from sockets. If your
+ * function has another name then do not define HAVE_RECV.
+ *
+ * If HAVE_RECV is defined then RECV_TYPE_ARG1, RECV_TYPE_ARG2,
+ * RECV_TYPE_ARG3, RECV_TYPE_ARG4 and RECV_TYPE_RETV must also
+ * be defined.
+ *
+ * HAVE_SEND is defined if you have a function named send()
+ * which is used to write outgoing data on a connected socket.
+ * If yours has another name then do not define HAVE_SEND.
+ *
+ * If HAVE_SEND is defined then SEND_TYPE_ARG1, SEND_TYPE_ARG2,
+ * SEND_TYPE_ARG3, SEND_TYPE_ARG4 and SEND_TYPE_RETV must also
+ * be defined. SEND_NONCONST_ARG2 must also be defined if ARG2
+ * does not accept const.
+ */
+
+#define sread(x, y, z) (ssize_t)recv((RECV_TYPE_ARG1)(x), \
+                                     (RECV_TYPE_ARG2)(y), \
+                                     (RECV_TYPE_ARG3)(z), \
+                                     (RECV_TYPE_ARG4)(0))
+#else /* HAVE_RECV */
+#ifndef sread
+#error "Missing definition of macro sread"
+#endif
+#endif /* HAVE_RECV */
+
+#ifdef __minix
+/* Minix does not support send on TCP sockets */
+#define swrite(x, y, z) (ssize_t)write((SEND_TYPE_ARG1)(x), \
+                                       (SEND_TYPE_ARG2)CURL_UNCONST(y), \
+                                       (SEND_TYPE_ARG3)(z))
+#elif defined(HAVE_SEND)
+#ifdef SEND_NONCONST_ARG2
+#define swrite(x, y, z) (ssize_t)send((SEND_TYPE_ARG1)(x), \
+                                      (SEND_TYPE_ARG2)CURL_UNCONST(y), \
+                                      (SEND_TYPE_ARG3)(z), \
+                                      (SEND_TYPE_ARG4)(SEND_4TH_ARG))
+#else
+#define swrite(x, y, z) (ssize_t)send((SEND_TYPE_ARG1)(x), \
+                                      (const SEND_TYPE_ARG2)(y), \
+                                      (SEND_TYPE_ARG3)(z), \
+                                      (SEND_TYPE_ARG4)(SEND_4TH_ARG))
+#endif /* SEND_NONCONST_ARG2 */
+#else /* HAVE_SEND */
+#ifndef swrite
+#error "Missing definition of macro swrite"
+#endif
+#endif /* HAVE_SEND */
+
+/*
+ * Function-like macro definition used to close a socket.
+ */
+#ifdef HAVE_CLOSESOCKET
+#  define CURL_SCLOSE(x)  closesocket(x)
+#elif defined(HAVE_CLOSESOCKET_CAMEL)
+#  define CURL_SCLOSE(x)  CloseSocket(x)
+#elif defined(MSDOS)  /* Watt-32 */
+#  define CURL_SCLOSE(x)  close_s(x)
+#elif defined(USE_LWIPSOCK)
+#  define CURL_SCLOSE(x)  lwip_close(x)
+#else
+#  define CURL_SCLOSE(x)  close(x)
+#endif
+
+/*
+ * Stack-independent version of fcntl() on sockets:
+ */
+#ifdef USE_LWIPSOCK
+#  define sfcntl  lwip_fcntl
+#else
+#  define sfcntl  fcntl
+#endif
+
+/*
+ * 'bool' stuff compatible with HP-UX headers.
+ */
+#if defined(__hpux) && !defined(HAVE_BOOL_T)
+typedef int bool;
+#  define false 0
+#  define true 1
+#  define HAVE_BOOL_T
+#endif
+
+/*
+ * 'bool' exists on platforms with <stdbool.h>, i.e. C99 platforms.
+ * On non-C99 platforms there is no bool, so define an enum for that.
+ * On C99 platforms 'false' and 'true' also exist. Enum uses a
+ * global namespace though, so use bool_false and bool_true.
+ */
+#ifndef HAVE_BOOL_T
+typedef enum {
+  bool_false = 0,
+  bool_true = 1
+} bool;
+
+/*
+ * Use a define to let 'true' and 'false' use those enums. There
+ * are currently no use of true and false in libcurl proper, but
+ * there are some in the examples. This will cater for any later
+ * code happening to use true and false.
+ */
+#  define false bool_false
+#  define true  bool_true
+#  define HAVE_BOOL_T
+#endif
+
+/* the type we use for storing a single boolean bit */
+typedef unsigned int curl_bit;
+#define BIT(x) curl_bit x:1
+
+/*
+ * Redefine TRUE and FALSE too, to catch current use. With this
+ * change, 'bool found = 1' will give a warning on MIPSPro, but
+ * 'bool found = TRUE' will not. Change tested on IRIX/MIPSPro,
+ * AIX 5.1/Xlc, Tru64 5.1/cc, w/make test too.
+ */
+#ifndef TRUE
+#define TRUE true
+#endif
+#ifndef FALSE
+#define FALSE false
+#endif
+
+#include "curl_ctype.h"
+
+#if defined(DEBUGBUILD) && defined(NDEBUG)
+#error "Debug-enabled builds cannot be combined with NDEBUG"
+#endif
+
+/*
+ * Macro used to include code only in debug builds.
+ */
+#ifdef DEBUGBUILD
+#define DEBUGF(x) x
+#else
+#define DEBUGF(x) do {} while(0)
+#endif
+
+/*
+ * Macro used to include assertion code only in debug builds.
+ */
+#undef DEBUGASSERT
+#ifdef DEBUGBUILD
+#ifdef CURL_DEBUGASSERT
+/* External assertion handler for custom integrations */
+#define DEBUGASSERT(x) CURL_DEBUGASSERT(x)
+#else
+#define DEBUGASSERT(x) assert(x)
+#endif
+#else
+#define DEBUGASSERT(x) do {} while(0)
+#endif
+
+/*
+ * Macro SOCKERRNO / SET_SOCKERRNO() returns / sets the *socket-related* errno
+ * (or equivalent) on this platform to hide platform details to code using it.
+ */
+#ifdef USE_WINSOCK
+#define SOCKERRNO         ((int)WSAGetLastError())
+#define SET_SOCKERRNO(x)  WSASetLastError((int)(x))
+#else
+#define SOCKERRNO         errno
+#define SET_SOCKERRNO(x)  (errno = (x))
+#endif
+
+/*
+ * Portable error number symbolic names defined to Winsock error codes.
+ */
+#ifdef USE_WINSOCK
+#define SOCKEACCES        WSAEACCES
+#define SOCKEADDRINUSE    WSAEADDRINUSE
+#define SOCKEADDRNOTAVAIL WSAEADDRNOTAVAIL
+#define SOCKEAFNOSUPPORT  WSAEAFNOSUPPORT
+#define SOCKEBADF         WSAEBADF
+#define SOCKECONNREFUSED  WSAECONNREFUSED
+#define SOCKECONNRESET    WSAECONNRESET
+#define SOCKEINPROGRESS   WSAEINPROGRESS
+#define SOCKEINTR         WSAEINTR
+#define SOCKEINVAL        WSAEINVAL
+#define SOCKEISCONN       WSAEISCONN
+#define SOCKEMSGSIZE      WSAEMSGSIZE
+/* Use literal value to work around clang-tidy <=20 misreporting
+  'readability-uppercase-literal-suffix' with mingw-w64 headers */
+#define SOCKENOMEM        8L  /* WSA_NOT_ENOUGH_MEMORY */
+#define SOCKETIMEDOUT     WSAETIMEDOUT
+#define SOCKEWOULDBLOCK   WSAEWOULDBLOCK
+#else
+#define SOCKEACCES        EACCES
+#define SOCKEADDRINUSE    EADDRINUSE
+#define SOCKEADDRNOTAVAIL EADDRNOTAVAIL
+#define SOCKEAFNOSUPPORT  EAFNOSUPPORT
+#define SOCKEBADF         EBADF
+#define SOCKECONNREFUSED  ECONNREFUSED
+#define SOCKECONNRESET    ECONNRESET
+#define SOCKEINPROGRESS   EINPROGRESS
+#define SOCKEINTR         EINTR
+#define SOCKEINVAL        EINVAL
+#define SOCKEISCONN       EISCONN
+#define SOCKEMSGSIZE      EMSGSIZE
+#define SOCKENOMEM        ENOMEM
+#ifdef ETIMEDOUT
+#define SOCKETIMEDOUT     ETIMEDOUT
+#endif
+#define SOCKEWOULDBLOCK   EWOULDBLOCK
+#endif
+
+/* The socket error may be EWOULDBLOCK or on some systems EAGAIN when
+   it returned due to its inability to send/read data without blocking.
+   We treat both error codes the same here. */
+#if !defined(USE_WINSOCK) && EAGAIN != SOCKEWOULDBLOCK
+#define SOCK_EAGAIN(e) ((e) == SOCKEWOULDBLOCK || (e) == EAGAIN)
+#else
+#define SOCK_EAGAIN(e) ((e) == SOCKEWOULDBLOCK)
+#endif
+
+/*
+ * Macro argv_item_t hides platform details to code using it.
+ */
+#ifdef __VMS
+#define argv_item_t  __char_ptr32
+#elif defined(_UNICODE)
+#define argv_item_t  wchar_t *
+#else
+#define argv_item_t  char *
+#endif
+
+/*
+ * We use this ZERO_NULL to avoid picky compiler warnings,
+ * when assigning a NULL pointer to a function pointer var.
+ */
+#define ZERO_NULL 0
 
 /*
  * Macros and functions to safely suppress warnings
@@ -785,10 +1163,17 @@
 #include "curlx/warnless.h"
 
 #ifdef _WIN32
-#  undef  read
+#  undef read
 #  define read(fd, buf, count)  (ssize_t)_read(fd, buf, curlx_uztoui(count))
-#  undef  write
+#  undef write
 #  define write(fd, buf, count) (ssize_t)_write(fd, buf, curlx_uztoui(count))
+/* Avoid VS2005+ _CRT_NONSTDC_NO_DEPRECATE warnings about non-portable funcs */
+#  undef fileno
+#  define fileno(fh) _fileno(fh)
+#  undef unlink
+#  define unlink(fn) _unlink(fn)
+#  undef isatty
+#  define isatty(fd) _isatty(fd)
 #endif
 
 /*
@@ -803,7 +1188,7 @@
  */
 #if defined(__LWIP_OPT_H__) || defined(LWIP_HDR_OPT_H)
 #  if defined(SOCKET) || defined(USE_WINSOCK)
-#    error "Winsock and lwIP TCP/IP stack definitions shall not coexist!"
+#    error "Winsock and lwIP TCP/IP stack definitions shall not coexist"
 #  endif
 #endif
 
@@ -845,26 +1230,35 @@
 
 /* Since O_BINARY is used in bitmasks, setting it to zero makes it usable in
    source code but yet it does not ruin anything */
-#ifdef O_BINARY
+#ifdef _O_BINARY  /* for _WIN32 || MSDOS */
+#define CURL_O_BINARY _O_BINARY
+#elif defined(O_BINARY)  /* __CYGWIN__ */
 #define CURL_O_BINARY O_BINARY
 #else
 #define CURL_O_BINARY 0
 #endif
 
+/* Requires io.h when available */
+#ifdef MSDOS
+#define CURL_BINMODE(stream) (void)setmode(fileno(stream), CURL_O_BINARY)
+#elif defined(_WIN32) || defined(__CYGWIN__)
+#define CURL_BINMODE(stream) (void)_setmode(fileno(stream), CURL_O_BINARY)
+#else
+#define CURL_BINMODE(stream) (void)(stream)
+#endif
+
 /* In Windows the default file mode is text but an application can override it.
-Therefore we specify it explicitly. https://github.com/curl/curl/pull/258
-*/
+   Therefore we specify it explicitly. https://github.com/curl/curl/pull/258 */
 #if defined(_WIN32) || defined(MSDOS)
 #define FOPEN_READTEXT   "rt"
 #define FOPEN_WRITETEXT  "wt"
 #define FOPEN_APPENDTEXT "at"
 #elif defined(__CYGWIN__)
 /* Cygwin has specific behavior we need to address when _WIN32 is not defined.
-https://cygwin.com/cygwin-ug-net/using-textbinary.html
-For write we want our output to have line endings of LF and be compatible with
-other Cygwin utilities. For read we want to handle input that may have line
-endings either CRLF or LF so 't' is appropriate.
-*/
+   https://cygwin.com/cygwin-ug-net/using-textbinary.html
+   For write we want our output to have line endings of LF and be compatible
+   with other Cygwin utilities. For read we want to handle input that may have
+   line endings either CRLF or LF so 't' is appropriate. */
 #define FOPEN_READTEXT   "rt"
 #define FOPEN_WRITETEXT  "w"
 #define FOPEN_APPENDTEXT "a"
@@ -876,7 +1270,7 @@ endings either CRLF or LF so 't' is appropriate.
 
 /* for systems that do not detect this in configure */
 #ifndef CURL_SA_FAMILY_T
-#  ifdef _WIN32
+#  ifdef USE_WINSOCK
 #    define CURL_SA_FAMILY_T ADDRESS_FAMILY
 #  elif defined(HAVE_SA_FAMILY_T)
 #    define CURL_SA_FAMILY_T sa_family_t
@@ -893,10 +1287,14 @@ endings either CRLF or LF so 't' is appropriate.
 #define CURLMAX(x, y) ((x) > (y) ? (x) : (y))
 #define CURLMIN(x, y) ((x) < (y) ? (x) : (y))
 
+/* Convenience macro to provide the length of a string literal size without
+   the null-terminator. Equivalent to strlen() for constant strings. */
+#define CURL_CSTRLEN(x) (sizeof(x) - 1)
+
 /* A convenience macro to provide both the string literal and the length of
    the string literal in one go, useful for functions that take "string,len"
    as their argument */
-#define STRCONST(x) x, sizeof(x) - 1
+#define STRCONST(x) x, CURL_CSTRLEN(x)
 
 #define CURL_ARRAYSIZE(A) (sizeof(A) / sizeof((A)[0]))
 
@@ -926,19 +1324,23 @@ extern curl_strdup_callback Curl_cstrdup;
 extern curl_calloc_callback Curl_ccalloc;
 
 /*
- * Curl_safefree defined as a macro to allow MemoryTracking feature
- * to log free() calls at same location where Curl_safefree is used.
+ * curlx_safefree() defined as a macro to allow MemoryTracking feature
+ * to log free() calls at same location where curlx_safefree() is used.
  * This macro also assigns NULL to given pointer when free'd.
  */
-#define Curl_safefree(ptr) \
-  do {                     \
-    curlx_free(ptr);       \
-    (ptr) = NULL;          \
+#define curlx_safefree(ptr) \
+  do {                      \
+    curlx_free(ptr);        \
+    (ptr) = NULL;           \
   } while(0)
 
 #include <curl/curl.h> /* for CURL_EXTERN, curl_socket_t, mprintf.h */
 
-#ifdef CURLDEBUG
+#ifdef DEBUGBUILD
+#define CURL_MEMDEBUG
+#endif
+
+#ifdef CURL_MEMDEBUG
 #ifdef __clang__
 #  define ALLOC_FUNC         __attribute__((__malloc__))
 #  if __clang_major__ >= 4
@@ -967,13 +1369,15 @@ extern FILE *curl_dbg_logfile;
 /* memory functions */
 CURL_EXTERN void curl_dbg_free(void *ptr, int line, const char *source);
 CURL_EXTERN ALLOC_FUNC ALLOC_SIZE(1)
-  void *curl_dbg_malloc(size_t size, int line, const char *source);
+  void *curl_dbg_malloc(size_t wantedsize, int line, const char *source);
 CURL_EXTERN ALLOC_FUNC ALLOC_SIZE2(1, 2)
-  void *curl_dbg_calloc(size_t n, size_t size, int line, const char *source);
+  void *curl_dbg_calloc(size_t wanted_elements, size_t wanted_size,
+                        int line, const char *source);
 CURL_EXTERN ALLOC_SIZE(2)
-  void *curl_dbg_realloc(void *ptr, size_t size, int line, const char *source);
+  void *curl_dbg_realloc(void *ptr, size_t wantedsize, int line,
+                         const char *source);
 CURL_EXTERN ALLOC_FUNC
-  char *curl_dbg_strdup(const char *str, int line, const char *src);
+  char *curl_dbg_strdup(const char *str, int line, const char *source);
 #if defined(_WIN32) && defined(UNICODE)
 CURL_EXTERN ALLOC_FUNC
   wchar_t *curl_dbg_wcsdup(const wchar_t *str, int line, const char *source);
@@ -990,7 +1394,8 @@ CURL_EXTERN void curl_dbg_mark_sclose(curl_socket_t sockfd,
                                       int line, const char *source);
 CURL_EXTERN int curl_dbg_sclose(curl_socket_t sockfd,
                                 int line, const char *source);
-CURL_EXTERN curl_socket_t curl_dbg_accept(curl_socket_t s, void *a, void *alen,
+CURL_EXTERN curl_socket_t curl_dbg_accept(curl_socket_t s,
+                                          void *saddr, void *saddrlen,
                                           int line, const char *source);
 #ifdef HAVE_ACCEPT4
 CURL_EXTERN curl_socket_t curl_dbg_accept4(curl_socket_t s, void *saddr,
@@ -1021,10 +1426,10 @@ CURL_EXTERN ALLOC_FUNC FILE *curl_dbg_fdopen(int filedes, const char *mode,
 #define CURL_FREEADDRINFO(data) \
   curl_dbg_freeaddrinfo(data, __LINE__, __FILE__)
 #define CURL_SOCKET(domain, type, protocol) \
-  curl_dbg_socket((int)domain, type, protocol, __LINE__, __FILE__)
+  curl_dbg_socket((int)(domain), type, protocol, __LINE__, __FILE__)
 #ifdef HAVE_SOCKETPAIR
 #define CURL_SOCKETPAIR(domain, type, protocol, socket_vector) \
-  curl_dbg_socketpair((int)domain, type, protocol, socket_vector, \
+  curl_dbg_socketpair((int)(domain), type, protocol, socket_vector, \
                       __LINE__, __FILE__)
 #endif
 #define CURL_ACCEPT(sock, addr, len) \
@@ -1034,7 +1439,7 @@ CURL_EXTERN ALLOC_FUNC FILE *curl_dbg_fdopen(int filedes, const char *mode,
   curl_dbg_accept4(sock, addr, len, flags, __LINE__, __FILE__)
 #endif
 
-#else /* !CURLDEBUG */
+#else /* !CURL_MEMDEBUG */
 
 #define sclose(x) CURL_SCLOSE(x)
 #define fake_sclose(x) Curl_nop_stmt
@@ -1050,11 +1455,17 @@ CURL_EXTERN ALLOC_FUNC FILE *curl_dbg_fdopen(int filedes, const char *mode,
 #define CURL_ACCEPT4 accept4
 #endif
 
-#endif /* CURLDEBUG */
+#endif /* CURL_MEMDEBUG */
 
 /* Allocator macros */
 
-#ifdef CURLDEBUG
+#ifdef _WIN32
+#define CURLX_STRDUP_LOW _strdup
+#else
+#define CURLX_STRDUP_LOW strdup
+#endif
+
+#ifdef CURL_MEMDEBUG
 
 #define curlx_strdup(ptr)          curl_dbg_strdup(ptr, __LINE__, __FILE__)
 #define curlx_malloc(size)         curl_dbg_malloc(size, __LINE__, __FILE__)
@@ -1068,39 +1479,35 @@ CURL_EXTERN ALLOC_FUNC FILE *curl_dbg_fdopen(int filedes, const char *mode,
 #ifdef UNICODE
 #define curlx_tcsdup(ptr)          curl_dbg_wcsdup(ptr, __LINE__, __FILE__)
 #else
-#define curlx_tcsdup(ptr)          curlx_strdup(ptr)
+#define curlx_tcsdup               curlx_strdup
 #endif
 #endif /* _WIN32 */
 
-#else /* !CURLDEBUG */
+#else /* !CURL_MEMDEBUG */
 
 #ifdef BUILDING_LIBCURL
-#define curlx_strdup(ptr)          Curl_cstrdup(ptr)
-#define curlx_malloc(size)         Curl_cmalloc(size)
-#define curlx_calloc(nbelem, size) Curl_ccalloc(nbelem, size)
-#define curlx_realloc(ptr, size)   Curl_crealloc(ptr, size)
-#define curlx_free(ptr)            Curl_cfree(ptr)
+#define curlx_strdup               Curl_cstrdup
+#define curlx_malloc               Curl_cmalloc
+#define curlx_calloc               Curl_ccalloc
+#define curlx_realloc              Curl_crealloc
+#define curlx_free                 Curl_cfree
 #else /* !BUILDING_LIBCURL */
-#ifdef _WIN32
-#define curlx_strdup(ptr)          _strdup(ptr)
-#else
-#define curlx_strdup(ptr)          strdup(ptr)
-#endif
-#define curlx_malloc(size)         malloc(size)
-#define curlx_calloc(nbelem, size) calloc(nbelem, size)
-#define curlx_realloc(ptr, size)   realloc(ptr, size)
-#define curlx_free(ptr)            free(ptr)
+#define curlx_strdup               CURLX_STRDUP_LOW
+#define curlx_malloc               malloc
+#define curlx_calloc               calloc
+#define curlx_realloc              realloc
+#define curlx_free                 free
 #endif /* BUILDING_LIBCURL */
 
 #ifdef _WIN32
 #ifdef UNICODE
-#define curlx_tcsdup(ptr)          Curl_wcsdup(ptr)
+#define curlx_tcsdup               curlx_wcsdup
 #else
-#define curlx_tcsdup(ptr)          curlx_strdup(ptr)
+#define curlx_tcsdup               curlx_strdup
 #endif
 #endif /* _WIN32 */
 
-#endif /* CURLDEBUG */
+#endif /* CURL_MEMDEBUG */
 
 /* Some versions of the Android NDK is missing the declaration */
 #if defined(HAVE_GETPWUID_R) && \
@@ -1120,9 +1527,7 @@ int getpwuid_r(uid_t uid, struct passwd *pwd, char *buf,
 #define USE_HTTP2
 #endif
 
-#if (defined(USE_NGTCP2) && defined(USE_NGHTTP3)) || \
-  (defined(USE_OPENSSL_QUIC) && defined(USE_NGHTTP3)) || \
-  defined(USE_QUICHE)
+#if (defined(USE_NGTCP2) && defined(USE_NGHTTP3)) || defined(USE_QUICHE)
 
 #ifdef CURL_WITH_MULTI_SSL
 #error "MultiSSL combined with QUIC is not supported"
@@ -1144,7 +1549,7 @@ int getpwuid_r(uid_t uid, struct passwd *pwd, char *buf,
 #endif
 
 #if defined(USE_UNIX_SOCKETS) && defined(_WIN32)
-/* Offered by mingw-w64 v10+. MS SDK 10.17763/~VS2017+. */
+/* Offered by mingw-w64 v10+, MS SDK 10.0.16299.0/VS2017 15.4+ */
 #if defined(__MINGW32__) && (__MINGW64_VERSION_MAJOR >= 10)
 #  include <afunix.h>
 #elif !defined(UNIX_PATH_MAX) /* Replicate logic present in afunix.h */
@@ -1158,8 +1563,11 @@ typedef struct sockaddr_un {
 #endif
 
 #ifdef USE_OPENSSL
-/* OpenSSLv3 marks DES, MD5 and ENGINE functions deprecated but we have no
-   replacements (yet) so tell the compiler to not warn for them. */
+/* OpenSSL 3 marks these functions deprecated but we have no replacements (yet)
+   so tell the compiler to not warn for them:
+   - DES_* (for NTLM)
+   - EVP_PKEY_get1_RSA, MD5_*, RSA_flags, RSA_free (auto-skipped for OpenSSL
+     built with no-deprecated) */
 #  define OPENSSL_SUPPRESS_DEPRECATED
 #  ifdef _WIN32
 /* Silence LibreSSL warnings about wincrypt.h collision. Works in 3.8.2+ */
@@ -1177,7 +1585,7 @@ typedef struct sockaddr_un {
 /* The code is compiled with C++ compiler.
    C++ always supports 'inline'. */
 #  define CURL_INLINE inline /* 'inline' keyword supported */
-#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901
+#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
 /* C99 (and later) supports 'inline' keyword */
 #  define CURL_INLINE inline /* 'inline' keyword supported */
 #elif defined(__GNUC__) && __GNUC__ >= 3
@@ -1190,5 +1598,66 @@ typedef struct sockaddr_un {
    Define to the empty string to be on the safe side. */
 #  define CURL_INLINE /* empty */
 #endif
+
+/* Detect if compiler supports C99 variadic macros */
+#if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) || \
+  defined(_MSC_VER)
+#define CURL_HAVE_MACRO_VARARG
+#endif
+
+#if !defined(CURL_HAVE_MACRO_VARARG) || \
+  (defined(CURL_HAVE_MACRO_VARARG) && !defined(CURL_DISABLE_VERBOSE_STRINGS))
+#define CURLVERBOSE
+#define VERBOSE(x) x
+#define NOVERBOSE(x) Curl_nop_stmt
+#else
+#define VERBOSE(x) Curl_nop_stmt
+#define NOVERBOSE(x) x
+#endif
+
+/* For FreeBSD it is included from curl/curl.h */
+#if defined(__DragonFly__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#include <sys/param.h>  /* for __DragonFly_version, OpenBSD,
+                           __NetBSD_Version__ */
+#endif
+
+/* NetBSD before 6.1 did not set SS_NBIO for SOCK_NONBLOCK. */
+#if defined(SOCK_NONBLOCK) && \
+  (!defined(__NetBSD__) || (__NetBSD_Version__ >= 601000000))
+#define CURL_USE_SOCK_NONBLOCK
+#endif
+
+#ifndef _CURL_LOCAL_MEMZERO /* to be removed after a couple of releases */
+#ifdef _WIN32
+#if defined(_MSC_VER) && defined(NTDDI_VERSION) && \
+  (NTDDI_VERSION >= 0x0A000010) /* MS SDK 10.0.26100.0+ */
+#pragma comment(lib, "volatileaccessu.lib")
+#define curlx_memzero_low(buf, size)  SecureZeroMemory2(buf, size)
+#else
+#define curlx_memzero_low(buf, size)  SecureZeroMemory(buf, size)
+#endif
+#elif defined(HAVE_MEMSET_S)
+#define curlx_memzero_low(buf, size)  (void)memset_s(buf, size, 0, size)
+#elif defined(HAVE_MEMSET_EXPLICIT)
+#define curlx_memzero_low(buf, size)  (void)memset_explicit(buf, 0, size)
+#elif defined(__CYGWIN__) || \
+  (defined(__NEWLIB__) && !defined(__CLIB2__)) || \
+  (defined(__GLIBC__) && \
+    (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 25))) || \
+  (defined(__DragonFly__) && __DragonFly_version >= 500600 /* 5.6+ */) || \
+  (defined(__FreeBSD__) && __FreeBSD_version >= 1100037 /* 11.0+ */) || \
+  (defined(__OpenBSD__) && OpenBSD >= 201405 /* 5.5+ */)
+#define curlx_memzero_low(buf, size)  explicit_bzero(buf, size)
+#elif defined(__NetBSD__) && __NetBSD_Version__ >= 702000000 /* 7.2+ */
+#define curlx_memzero_low(buf, size)  (void)explicit_memset(buf, 0, size)
+#endif
+#endif /* !_CURL_LOCAL_MEMZERO */
+
+#ifndef curlx_memzero_low
+#define USE_CURLX_MEMZERO
+void curlx_memzero_low(void *buf, size_t size);
+#endif
+void curlx_memzero(void *buf, size_t size);
+void curlx_strzero(void *buf);
 
 #endif /* HEADER_CURL_SETUP_H */

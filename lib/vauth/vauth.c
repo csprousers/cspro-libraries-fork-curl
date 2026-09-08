@@ -21,11 +21,12 @@
  * SPDX-License-Identifier: curl
  *
  ***************************************************************************/
-#include "../curl_setup.h"
+#include "curl_setup.h"
 
-#include "vauth.h"
-#include "../curlx/multibyte.h"
-#include "../url.h"
+#include "vauth/vauth.h"
+#include "creds.h"
+#include "curlx/multibyte.h"
+#include "url.h"
 
 /*
  * Curl_auth_build_spn()
@@ -111,15 +112,16 @@ TCHAR *Curl_auth_build_spn(const char *service, const char *host,
  *
  * Returns TRUE on success; otherwise FALSE.
  */
-bool Curl_auth_user_contains_domain(const char *user)
+bool Curl_auth_user_contains_domain(struct Curl_creds *creds)
 {
   bool valid = FALSE;
 
-  if(user && *user) {
+  if(Curl_creds_has_user(creds)) {
     /* Check we have a domain name or UPN present */
-    char *p = strpbrk(user, "\\/@");
+    const char *p = strpbrk(creds->user, "\\/@");
 
-    valid = (p != NULL && p > user && p < user + strlen(user) - 1);
+    valid = p && (p > creds->user) &&
+            (p < (creds->user + strlen(creds->user) - 1));
   }
 #if defined(HAVE_GSSAPI) || defined(USE_WINDOWS_SSPI)
   else
@@ -133,21 +135,21 @@ bool Curl_auth_user_contains_domain(const char *user)
 
 /*
  * Curl_auth_allowed_to_host() tells if authentication, cookies or other
- * "sensitive data" can (still) be sent to this host.
+ * "sensitive data" can be sent to the connection's origin.
  */
 bool Curl_auth_allowed_to_host(struct Curl_easy *data)
 {
-  struct connectdata *conn = data->conn;
-  return !data->state.this_is_a_follow ||
-         data->set.allow_auth_to_other_hosts ||
-         (data->state.first_host &&
-          curl_strequal(data->state.first_host, conn->host.name) &&
-          (data->state.first_remote_port == conn->remote_port) &&
-          (data->state.first_remote_protocol == conn->handler->protocol));
+  return Curl_auth_allowed_to_origin(data, data->state.origin);
+}
+
+bool Curl_auth_allowed_to_origin(struct Curl_easy *data,
+                                 struct Curl_peer *origin)
+{
+  return data->set.allow_auth_to_other_hosts ||
+         Curl_peer_equal(data->state.initial_origin, origin);
 }
 
 #ifdef USE_NTLM
-
 static void ntlm_conn_dtor(void *key, size_t klen, void *entry)
 {
   struct ntlmdata *ntlm = entry;
@@ -175,11 +177,9 @@ void Curl_auth_ntlm_remove(struct connectdata *conn, bool proxy)
   Curl_conn_meta_remove(conn, proxy ? CURL_META_NTLM_PROXY_CONN
                                     : CURL_META_NTLM_CONN);
 }
-
 #endif /* USE_NTLM */
 
 #ifdef USE_KERBEROS5
-
 static void krb5_conn_dtor(void *key, size_t klen, void *entry)
 {
   struct kerberos5data *krb5 = entry;
@@ -201,11 +201,9 @@ struct kerberos5data *Curl_auth_krb5_get(struct connectdata *conn)
   }
   return krb5;
 }
-
 #endif /* USE_KERBEROS5 */
 
 #ifdef USE_GSASL
-
 static void gsasl_conn_dtor(void *key, size_t klen, void *entry)
 {
   struct gsasldata *gsasl = entry;
@@ -227,11 +225,9 @@ struct gsasldata *Curl_auth_gsasl_get(struct connectdata *conn)
   }
   return gsasl;
 }
-
 #endif /* USE_GSASL */
 
 #ifdef USE_SPNEGO
-
 static void nego_conn_dtor(void *key, size_t klen, void *entry)
 {
   struct negotiatedata *nego = entry;
@@ -253,5 +249,4 @@ struct negotiatedata *Curl_auth_nego_get(struct connectdata *conn, bool proxy)
   }
   return nego;
 }
-
 #endif /* USE_SPNEGO */

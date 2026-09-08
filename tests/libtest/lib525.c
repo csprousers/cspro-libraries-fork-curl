@@ -30,7 +30,7 @@ static CURLcode test_lib525(const char *URL)
   char errbuf[STRERROR_LEN];
   FILE *hd_src = NULL;
   int hd;
-  struct_stat file_info;
+  curlx_struct_stat file_info;
   CURLM *multi = NULL;
   int running;
 
@@ -50,7 +50,7 @@ static CURLcode test_lib525(const char *URL)
   }
 
   /* get the file size of the local file */
-  hd = fstat(fileno(hd_src), &file_info);
+  hd = curlx_fstat(fileno(hd_src), &file_info);
   if(hd == -1) {
     /* cannot open file, bail out */
     curl_mfprintf(stderr, "fstat() failed with error (%d) %s\n",
@@ -85,7 +85,7 @@ static CURLcode test_lib525(const char *URL)
 
   /* NOTE: if you want this code to work on Windows with libcurl as a DLL, you
      MUST also provide a read callback with CURLOPT_READFUNCTION. Failing to
-     do so will give you a crash since a DLL may not use the variable's memory
+     do so gives you a crash since a DLL may not use the variable's memory
      when passed in to it from an app like this. */
 
   /* Set the size of the file to upload (optional).  If you give a *_LARGE

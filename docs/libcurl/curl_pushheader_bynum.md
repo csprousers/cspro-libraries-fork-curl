@@ -48,13 +48,13 @@ static int push_cb(CURL *parent,
                    struct curl_pushheaders *headers,
                    void *clientp)
 {
-  int i = 0;
+  size_t i = 0;
   char *field;
   do {
-     field = curl_pushheader_bynum(headers, i);
-     if(field)
-       fprintf(stderr, "Push header: %s\n", field);
-     i++;
+    field = curl_pushheader_bynum(headers, i);
+    if(field)
+      fprintf(stderr, "Push header: %s\n", field);
+    i++;
   } while(field);
   return CURL_PUSH_OK; /* permission granted */
 }

@@ -51,6 +51,7 @@ static const struct category_descriptors categories[] = {
   { "http", "HTTP and HTTPS protocol", CURLHELP_HTTP },
   { "imap", "IMAP protocol", CURLHELP_IMAP },
   { "ldap", "LDAP protocol", CURLHELP_LDAP },
+  { "mqtt", "MQTT protocol", CURLHELP_MQTT },
   { "output", "File system output", CURLHELP_OUTPUT },
   { "pop3", "POP3 protocol", CURLHELP_POP3 },
   { "post", "HTTP POST specific", CURLHELP_POST },
@@ -166,8 +167,9 @@ void inithelpscan(struct scan_ctx *ctx,
   ctx->flen = strlen(arg);
   ctx->endarg = endarg;
   ctx->elen = strlen(endarg);
-  DEBUGASSERT((ctx->elen < sizeof(ctx->rbuf)) ||
-              (ctx->flen < sizeof(ctx->rbuf)));
+  DEBUGASSERT((ctx->elen < sizeof(ctx->rbuf)) &&
+              (ctx->flen < sizeof(ctx->rbuf)) &&
+              (ctx->tlen < sizeof(ctx->rbuf)));
   ctx->show = 0;
   ctx->olen = 0;
   memset(ctx->rbuf, 0, sizeof(ctx->rbuf));
@@ -281,13 +283,11 @@ void tool_help(const char *category)
         curl_msnprintf(cmdbuf, sizeof(cmdbuf), "\n    --no-%s", a->lname);
       else
         curl_msnprintf(cmdbuf, sizeof(cmdbuf), "\n    %s", category);
-#ifdef USE_MANUAL
       if(a->cmd == C_XATTR)
         /* this is the last option, which then ends when FILES starts */
         showhelp("\nALL OPTIONS\n", cmdbuf, "\nFILES");
       else
         showhelp("\nALL OPTIONS\n", cmdbuf, "\n    -");
-#endif
     }
 #else
     curl_mfprintf(tool_stderr, "Cannot comply. "
@@ -330,7 +330,7 @@ void tool_version_info(void)
     /* we have ipfs and ipns support if libcurl has http support */
     for(builtin = built_in_protos; *builtin; ++builtin) {
       if(insert) {
-        /* update insertion so ipfs will be printed in alphabetical order */
+        /* update insertion so ipfs is printed in alphabetical order */
         if(strcmp(*builtin, "ipfs") < 0)
           insert = *builtin;
         else
@@ -343,10 +343,7 @@ void tool_version_info(void)
 #endif /* !CURL_DISABLE_IPFS */
     curl_mprintf("Protocols:");
     for(builtin = built_in_protos; *builtin; ++builtin) {
-      /* Special case: do not list rtmp?* protocols.
-         They may only appear together with "rtmp" */
-      if(!curl_strnequal(*builtin, "rtmp", 4) || !builtin[0][4])
-        curl_mprintf(" %s", *builtin);
+      curl_mprintf(" %s", *builtin);
 #ifndef CURL_DISABLE_IPFS
       if(insert && insert == *builtin) {
         curl_mprintf(" ipfs ipns");
@@ -362,6 +359,9 @@ void tool_version_info(void)
 #ifdef CURL_CA_EMBED
     ++feat_ext_count;
 #endif
+#ifdef CURL_DEBUG_GLOBAL_MEM
+    ++feat_ext_count;
+#endif
     feat_ext = curlx_malloc(sizeof(*feature_names) * (feat_ext_count + 1));
     if(feat_ext) {
       memcpy((void *)feat_ext, feature_names,
@@ -369,6 +369,9 @@ void tool_version_info(void)
       feat_ext_count = feature_count;
 #ifdef CURL_CA_EMBED
       feat_ext[feat_ext_count++] = "CAcert";
+#endif
+#ifdef CURL_DEBUG_GLOBAL_MEM
+      feat_ext[feat_ext_count++] = "global-mem-debug";
 #endif
       feat_ext[feat_ext_count] = NULL;
       qsort((void *)feat_ext, feat_ext_count, sizeof(*feat_ext),

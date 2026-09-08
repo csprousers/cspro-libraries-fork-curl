@@ -41,7 +41,7 @@ the CURL_VERSION_THREADSAFE feature bit set (most platforms).
 
 If this is not thread-safe, you must not call this function when any other
 thread in the program (i.e. a thread sharing the same memory) is running. This
-does not just mean no other thread that is using libcurl. Because
+does not only mean no other thread that is using libcurl. Because
 curl_global_init(3) may call functions of other libraries that are similarly
 thread-unsafe, it could conflict with any other thread that uses these other
 libraries.
@@ -101,6 +101,11 @@ trace.
 
 Tracing of DNS operations to resolve hostnames and HTTPS records.
 
+## `doh`
+
+Tracing of DoH operations (DNS over HTTPS) to resolve hostnames and
+HTTPS records.
+
 ## `lib-ids`
 
 Adds transfer and connection identifiers as prefix to every call to
@@ -115,10 +120,6 @@ connection. The command line tool `curl`uses the same format for its
 `lib-ids` is intended for libcurl applications that handle multiple
 transfers but have no own way to identify in trace output which transfer
 a trace event is connected to.
-
-## `doh`
-
-Former name for DNS-over-HTTP operations. Now an alias for `dns`.
 
 ## `multi`
 
@@ -141,6 +142,10 @@ Tracing of SSL Session handling, e.g. caching/import/export.
 ## `smtp`
 
 Tracing of SMTP operations when this protocol is enabled in your build.
+
+## `threads`
+
+Tracing of thread queue and pools, used in threaded DNS resolving.
 
 ## `timer`
 

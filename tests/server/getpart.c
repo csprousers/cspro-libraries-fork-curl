@@ -67,7 +67,7 @@ static size_t line_length(const char *buffer, int bytestocheck)
  *
  * Calling function may call this multiple times with same 'buffer'
  * and 'bufsize' pointers to avoid multiple buffer allocations. Buffer
- * will be reallocated and 'bufsize' increased until whole line fits in
+ * is reallocated and 'bufsize' increased until whole line fits in
  * buffer before returning it.
  *
  * Calling function is responsible to free allocated buffer.
@@ -132,7 +132,7 @@ static int readline(char **buffer, size_t *bufsize, size_t *length,
  * decoded data, binary or whatever, to the destination. The source buffer
  * may not hold binary data, only a null-terminated string is valid content.
  *
- * Destination buffer will be enlarged and relocated as needed.
+ * Destination buffer is enlarged and relocated as needed.
  *
  * Calling function is responsible to provide preallocated destination
  * buffer and also to deallocate it when no longer needed.
@@ -141,12 +141,13 @@ static int readline(char **buffer, size_t *bufsize, size_t *length,
  *   GPE_OUT_OF_MEMORY
  *   GPE_OK
  */
-static int appenddata(char  **dst_buf,   /* dest buffer */
-                      size_t *dst_len,   /* dest buffer data length */
-                      size_t *dst_alloc, /* dest buffer allocated size */
-                      char   *src_buf,   /* source buffer */
-                      size_t  src_len,   /* source buffer length */
-                      int     src_b64)   /* != 0 if source is base64 encoded */
+static int appenddata(char **dst_buf,      /* dest buffer */
+                      size_t *dst_len,     /* dest buffer data length */
+                      size_t *dst_alloc,   /* dest buffer allocated size */
+                      const char *src_buf, /* source buffer */
+                      size_t src_len,      /* source buffer length */
+                      int src_b64)         /* != 0 if source is base64
+                                              encoded */
 {
   size_t need_alloc = 0;
 
@@ -182,10 +183,10 @@ static int appenddata(char  **dst_buf,   /* dest buffer */
   return GPE_OK;
 }
 
-static int decodedata(char  **buf, /* dest buffer */
+static int decodedata(char **buf,  /* dest buffer */
                       size_t *len) /* dest buffer data length */
 {
-  CURLcode error = CURLE_OK;
+  CURLcode result = CURLE_OK;
   unsigned char *buf64 = NULL;
   size_t src_len = 0;
 
@@ -193,17 +194,17 @@ static int decodedata(char  **buf, /* dest buffer */
     return GPE_OK;
 
   /* base64 decode the given buffer */
-  error = curlx_base64_decode(*buf, &buf64, &src_len);
-  if(error)
+  result = curlx_base64_decode(*buf, &buf64, &src_len);
+  if(result)
     return GPE_OUT_OF_MEMORY;
 
   if(!src_len) {
     /*
-    ** currently there is no way to tell apart an OOM condition in
-    ** curlx_base64_decode() from zero length decoded data. For now,
-    ** let's just assume it is an OOM condition, currently we have
-    ** no input for this function that decodes to zero length data.
-    */
+     * currently there is no way to tell apart an OOM condition in
+     * curlx_base64_decode() from zero length decoded data. For now,
+     * let's assume it is an OOM condition, currently we have
+     * no input for this function that decodes to zero length data.
+     */
     free(buf64);
 
     return GPE_OUT_OF_MEMORY;
@@ -229,8 +230,8 @@ static int decodedata(char  **buf, /* dest buffer */
  * Data is returned in a dynamically allocated buffer, a pointer to this data
  * and the size of the data is stored at the addresses that caller specifies.
  *
- * If the returned data is a string the returned size will be the length of
- * the string excluding null-termination. Otherwise it will just be the size
+ * If the returned data is a string the returned size is the length of
+ * the string excluding null-termination. Otherwise it is the size
  * of the returned binary data.
  *
  * Calling function is responsible to free returned buffer.
@@ -299,8 +300,8 @@ int getpart(char **outbuf, size_t *outlen,
 
     if('/' == *ptr) {
       /*
-      ** closing section tag
-      */
+       * closing section tag
+       */
 
       ptr++;
       end = ptr;
@@ -355,8 +356,8 @@ int getpart(char **outbuf, size_t *outlen,
     }
     else if(!in_wanted_part) {
       /*
-      ** opening section tag
-      */
+       * opening section tag
+       */
 
       /* get potential tag */
       end = ptr;

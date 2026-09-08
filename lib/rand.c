@@ -33,56 +33,7 @@
 #include "rand.h"
 #include "escape.h"
 
-#ifdef _WIN32
-
-#if defined(_WIN32_WINNT) && _WIN32_WINNT >= _WIN32_WINNT_VISTA && \
-  !defined(CURL_WINDOWS_UWP)
-#  define HAVE_WIN_BCRYPTGENRANDOM
-#  include <bcrypt.h>
-#  ifdef _MSC_VER
-#    pragma comment(lib, "bcrypt.lib")
-#  endif
-#  ifndef STATUS_SUCCESS
-#  define STATUS_SUCCESS ((NTSTATUS)0x00000000L)
-#  endif
-#elif defined(USE_WIN32_CRYPTO)
-#  include <wincrypt.h>
-#  ifdef _MSC_VER
-#    pragma comment(lib, "advapi32.lib")
-#  endif
-#endif
-
-CURLcode Curl_win32_random(unsigned char *entropy, size_t length)
-{
-  memset(entropy, 0, length);
-
-#ifdef HAVE_WIN_BCRYPTGENRANDOM
-  if(BCryptGenRandom(NULL, entropy, (ULONG)length,
-                     BCRYPT_USE_SYSTEM_PREFERRED_RNG) != STATUS_SUCCESS)
-    return CURLE_FAILED_INIT;
-
-  return CURLE_OK;
-#elif defined(USE_WIN32_CRYPTO)
-  {
-    HCRYPTPROV hCryptProv = 0;
-
-    if(!CryptAcquireContext(&hCryptProv, NULL, NULL, PROV_RSA_FULL,
-                            CRYPT_VERIFYCONTEXT | CRYPT_SILENT))
-      return CURLE_FAILED_INIT;
-
-    if(!CryptGenRandom(hCryptProv, (DWORD)length, entropy)) {
-      CryptReleaseContext(hCryptProv, 0UL);
-      return CURLE_FAILED_INIT;
-    }
-
-    CryptReleaseContext(hCryptProv, 0UL);
-  }
-  return CURLE_OK;
-#else
-  return CURLE_NOT_BUILT_IN;
-#endif
-}
-#endif
+#include "curlx/winapi.h"
 
 #ifndef USE_SSL
 /* ---- possibly non-cryptographic version following ---- */
@@ -97,7 +48,7 @@ static CURLcode weak_random(struct Curl_easy *data,
 #ifdef _WIN32
   (void)data;
   {
-    CURLcode result = Curl_win32_random(entropy, length);
+    CURLcode result = curlx_win32_random(entropy, length);
     if(result != CURLE_NOT_BUILT_IN)
       return result;
   }
@@ -219,7 +170,7 @@ CURLcode Curl_rand_bytes(struct Curl_easy *data,
 
 /*
  * Curl_rand_hex() fills the 'rnd' buffer with a given 'num' size with random
- * hexadecimal digits PLUS a null-terminating byte. It must be an odd number
+ * hexadecimal digits PLUS a null-terminator byte. It must be an odd number
  * size.
  */
 
@@ -228,12 +179,6 @@ CURLcode Curl_rand_hex(struct Curl_easy *data, unsigned char *rnd, size_t num)
   CURLcode result = CURLE_BAD_FUNCTION_ARGUMENT;
   unsigned char buffer[128];
   DEBUGASSERT(num > 1);
-
-#ifdef __clang_analyzer__
-  /* This silences a scan-build warning about accessing this buffer with
-     uninitialized memory. */
-  memset(buffer, 0, sizeof(buffer));
-#endif
 
   if((num / 2 >= sizeof(buffer)) || !(num & 1)) {
     /* make sure it fits in the local buffer and that it is an odd number! */
@@ -253,7 +198,7 @@ CURLcode Curl_rand_hex(struct Curl_easy *data, unsigned char *rnd, size_t num)
 
 /*
  * Curl_rand_alnum() fills the 'rnd' buffer with a given 'num' size with random
- * alphanumerical chars PLUS a null-terminating byte.
+ * alphanumerical chars PLUS a null-terminator byte.
  */
 
 static const char alnum[] =
@@ -263,7 +208,7 @@ CURLcode Curl_rand_alnum(struct Curl_easy *data, unsigned char *rnd,
                          size_t num)
 {
   CURLcode result = CURLE_OK;
-  const unsigned int alnumspace = sizeof(alnum) - 1;
+  const unsigned int alnumspace = CURL_CSTRLEN(alnum);
   unsigned int r;
   DEBUGASSERT(num > 1);
 

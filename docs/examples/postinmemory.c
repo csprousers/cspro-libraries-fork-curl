@@ -36,7 +36,7 @@ struct MemoryStruct {
   size_t size;
 };
 
-static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp)
+static size_t write_cb(char *contents, size_t size, size_t nmemb, void *userp)
 {
   size_t realsize = size * nmemb;
   struct MemoryStruct *mem = (struct MemoryStruct *)userp;
@@ -49,7 +49,7 @@ static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp)
   }
 
   mem->memory = ptr;
-  memcpy(&(mem->memory[mem->size]), contents, realsize);
+  memcpy(&mem->memory[mem->size], contents, realsize);
   mem->size += realsize;
   mem->memory[mem->size] = 0;
 
@@ -61,10 +61,10 @@ int main(void)
   CURL *curl;
   CURLcode result;
   struct MemoryStruct chunk;
-  static const char *postthis = "Field=1&Field=2&Field=3";
+  static const char postthis[] = "Field=1&Field=2&Field=3";
 
   result = curl_global_init(CURL_GLOBAL_ALL);
-  if(result)
+  if(result != CURLE_OK)
     return (int)result;
 
   chunk.memory = malloc(1);  /* grown as needed by realloc above */
@@ -74,7 +74,7 @@ int main(void)
   if(curl) {
     curl_easy_setopt(curl, CURLOPT_URL, "https://www.example.org/");
 
-    /* send all data to this function  */
+    /* send all data to this function */
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
 
     /* we pass our 'chunk' struct to the callback function */
@@ -87,7 +87,7 @@ int main(void)
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postthis);
 
     /* if we do not provide POSTFIELDSIZE, libcurl calls strlen() by itself */
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)strlen(postthis));
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)sizeof(postthis) - 1);
 
     /* Perform the request, result gets the return code */
     result = curl_easy_perform(curl);

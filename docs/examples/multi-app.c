@@ -47,7 +47,7 @@ int main(void)
   int i;
 
   CURLcode result = curl_global_init(CURL_GLOBAL_ALL);
-  if(result)
+  if(result != CURLE_OK)
     return (int)result;
 
   /* Allocate one curl handle per transfer */
@@ -99,10 +99,12 @@ int main(void)
 
         switch(idx) {
         case HTTP_HANDLE:
-          printf("HTTP transfer completed with status %d\n", msg->data.result);
+          printf("HTTP transfer completed with status %d\n",
+                 (int)msg->data.result);
           break;
         case FTP_HANDLE:
-          printf("FTP transfer completed with status %d\n", msg->data.result);
+          printf("FTP transfer completed with status %d\n",
+                 (int)msg->data.result);
           break;
         }
       }

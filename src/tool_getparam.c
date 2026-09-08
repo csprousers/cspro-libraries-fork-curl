@@ -36,7 +36,6 @@
 #include "tool_main.h"
 #include "tool_stderr.h"
 #include "tool_help.h"
-#include "tool_strdup.h"
 #include "var.h"
 
 #define ALLOW_BLANK TRUE
@@ -44,10 +43,8 @@
 
 static ParameterError getstr(char **str, const char *val, bool allowblank)
 {
-  if(*str) {
-    curlx_free(*str);
-    *str = NULL;
-  }
+  if(*str)
+    curlx_safefree(*str);
   DEBUGASSERT(val);
   if(!allowblank && !val[0])
     return PARAM_BLANK_STRING;
@@ -62,15 +59,13 @@ static ParameterError getstr(char **str, const char *val, bool allowblank)
 static ParameterError getstrn(char **str, const char *val,
                               size_t len, bool allowblank)
 {
-  if(*str) {
-    curlx_free(*str);
-    *str = NULL;
-  }
+  if(*str)
+    curlx_safefree(*str);
   DEBUGASSERT(val);
   if(!allowblank && !val[0])
     return PARAM_BLANK_STRING;
 
-  *str = memdup0(val, len);
+  *str = curlx_memdup0(val, len);
   if(!*str)
     return PARAM_NO_MEM;
 
@@ -78,7 +73,7 @@ static ParameterError getstrn(char **str, const char *val,
 }
 
 /* this array MUST be alphasorted based on the 'lname' */
-static const struct LongShort aliases[]= {
+static const struct LongShort aliases[] = {
   {"abstract-unix-socket",       ARG_FILE, ' ', C_ABSTRACT_UNIX_SOCKET},
   {"alpn",                       ARG_BOOL|ARG_NO|ARG_TLS, ' ', C_ALPN},
   {"alt-svc",                    ARG_STRG, ' ', C_ALT_SVC},
@@ -98,7 +93,7 @@ static const struct LongShort aliases[]= {
   {"compressed",                 ARG_BOOL, ' ', C_COMPRESSED},
   {"compressed-ssh",             ARG_BOOL, ' ', C_COMPRESSED_SSH},
   {"config",                     ARG_FILE, 'K', C_CONFIG},
-  {"connect-timeout",            ARG_STRG, ' ', C_CONNECT_TIMEOUT},
+  {"connect-timeout",            ARG_SECS, ' ', C_CONNECT_TIMEOUT},
   {"connect-to",                 ARG_STRG, ' ', C_CONNECT_TO},
   {"continue-at",                ARG_STRG, 'C', C_CONTINUE_AT},
   {"cookie",                     ARG_STRG, 'b', C_COOKIE},
@@ -125,7 +120,7 @@ static const struct LongShort aliases[]= {
   {"dns-servers",                ARG_STRG, ' ', C_DNS_SERVERS},
   {"doh-cert-status",            ARG_BOOL|ARG_TLS, ' ', C_DOH_CERT_STATUS},
   {"doh-insecure",               ARG_BOOL|ARG_TLS, ' ', C_DOH_INSECURE},
-  {"doh-url"        ,            ARG_STRG, ' ', C_DOH_URL},
+  {"doh-url",                    ARG_STRG, ' ', C_DOH_URL},
   {"dump-ca-embed",              ARG_NONE|ARG_TLS, ' ', C_DUMP_CA_EMBED},
   {"dump-header",                ARG_FILE, 'D', C_DUMP_HEADER},
   {"ech",                        ARG_STRG|ARG_TLS, ' ', C_ECH},
@@ -135,7 +130,7 @@ static const struct LongShort aliases[]= {
   {"epsv",                       ARG_BOOL, ' ', C_EPSV},
   {"etag-compare",               ARG_FILE, ' ', C_ETAG_COMPARE},
   {"etag-save",                  ARG_FILE, ' ', C_ETAG_SAVE},
-  {"expect100-timeout",          ARG_STRG, ' ', C_EXPECT100_TIMEOUT},
+  {"expect100-timeout",          ARG_SECS, ' ', C_EXPECT100_TIMEOUT},
   {"fail",                       ARG_BOOL, 'f', C_FAIL},
   {"fail-early",                 ARG_BOOL, ' ', C_FAIL_EARLY},
   {"fail-with-body",             ARG_BOOL, ' ', C_FAIL_WITH_BODY},
@@ -159,7 +154,7 @@ static const struct LongShort aliases[]= {
   {"ftp-ssl-reqd",               ARG_BOOL|ARG_TLS, ' ', C_FTP_SSL_REQD},
   {"get",                        ARG_BOOL, 'G', C_GET},
   {"globoff",                    ARG_BOOL, 'g', C_GLOBOFF},
-  {"happy-eyeballs-timeout-ms",  ARG_STRG, ' ', C_HAPPY_EYEBALLS_TIMEOUT_MS},
+  {"happy-eyeballs-timeout-ms",  ARG_UNUM, ' ', C_HAPPY_EYEBALLS_TIMEOUT_MS},
   {"haproxy-clientip",           ARG_STRG, ' ', C_HAPROXY_CLIENTIP},
   {"haproxy-protocol",           ARG_BOOL, ' ', C_HAPROXY_PROTOCOL},
   {"head",                       ARG_BOOL, 'I', C_HEAD},
@@ -175,6 +170,12 @@ static const struct LongShort aliases[]= {
   {"http2-prior-knowledge",      ARG_NONE, ' ', C_HTTP2_PRIOR_KNOWLEDGE},
   {"http3",                      ARG_NONE|ARG_TLS, ' ', C_HTTP3},
   {"http3-only",                 ARG_NONE|ARG_TLS, ' ', C_HTTP3_ONLY},
+#ifndef CURL_DISABLE_HTTPSIG
+  {"httpsig-algo",               ARG_STRG, ' ', C_HTTPSIG_ALGORITHM},
+  {"httpsig-headers",            ARG_STRG, ' ', C_HTTPSIG_HEADERS},
+  {"httpsig-key",                ARG_FILE|ARG_CLEAR, ' ', C_HTTPSIG_KEY},
+  {"httpsig-keyid",              ARG_STRG, ' ', C_HTTPSIG_KEYID},
+#endif
   {"ignore-content-length",      ARG_BOOL, ' ', C_IGNORE_CONTENT_LENGTH},
   {"include",                    ARG_BOOL, ' ', C_INCLUDE},
   {"insecure",                   ARG_BOOL, 'k', C_INSECURE},
@@ -182,14 +183,14 @@ static const struct LongShort aliases[]= {
   {"ip-tos",                     ARG_STRG, ' ', C_IP_TOS},
 #ifndef CURL_DISABLE_IPFS
   {"ipfs-gateway",               ARG_STRG, ' ', C_IPFS_GATEWAY},
-#endif /* !CURL_DISABLE_IPFS */
+#endif
   {"ipv4",                       ARG_NONE, '4', C_IPV4},
   {"ipv6",                       ARG_NONE, '6', C_IPV6},
   {"json",                       ARG_STRG, ' ', C_JSON},
   {"junk-session-cookies",       ARG_BOOL, 'j', C_JUNK_SESSION_COOKIES},
   {"keepalive",                  ARG_BOOL|ARG_NO, ' ', C_KEEPALIVE},
-  {"keepalive-cnt",              ARG_STRG, ' ', C_KEEPALIVE_CNT},
-  {"keepalive-time",             ARG_STRG, ' ', C_KEEPALIVE_TIME},
+  {"keepalive-cnt",              ARG_UNUM, ' ', C_KEEPALIVE_CNT},
+  {"keepalive-time",             ARG_UNUM, ' ', C_KEEPALIVE_TIME},
   {"key",                        ARG_FILE, ' ', C_KEY},
   {"key-type",                   ARG_STRG|ARG_TLS, ' ', C_KEY_TYPE},
   {"knownhosts",                 ARG_FILE, ' ', C_KNOWNHOSTS},
@@ -209,7 +210,7 @@ static const struct LongShort aliases[]= {
   {"manual",                     ARG_BOOL, 'M', C_MANUAL},
   {"max-filesize",               ARG_STRG, ' ', C_MAX_FILESIZE},
   {"max-redirs",                 ARG_STRG, ' ', C_MAX_REDIRS},
-  {"max-time",                   ARG_STRG, 'm', C_MAX_TIME},
+  {"max-time",                   ARG_SECS, 'm', C_MAX_TIME},
   {"metalink",                   ARG_BOOL|ARG_DEPR, ' ', C_METALINK},
   {"mptcp",                      ARG_BOOL, ' ', C_MPTCP},
   {"negotiate",                  ARG_BOOL, ' ', C_NEGOTIATE},
@@ -227,8 +228,8 @@ static const struct LongShort aliases[]= {
   {"output-dir",                 ARG_STRG, ' ', C_OUTPUT_DIR},
   {"parallel",                   ARG_BOOL, 'Z', C_PARALLEL},
   {"parallel-immediate",         ARG_BOOL, ' ', C_PARALLEL_IMMEDIATE},
-  {"parallel-max",               ARG_STRG, ' ', C_PARALLEL_MAX},
-  {"parallel-max-host",          ARG_STRG, ' ', C_PARALLEL_HOST},
+  {"parallel-max",               ARG_UNUM, ' ', C_PARALLEL_MAX},
+  {"parallel-max-host",          ARG_UNUM, ' ', C_PARALLEL_HOST},
   {"pass",                       ARG_STRG|ARG_CLEAR, ' ', C_PASS},
   {"path-as-is",                 ARG_BOOL, ' ', C_PATH_AS_IS},
   {"pinnedpubkey",               ARG_STRG|ARG_TLS, ' ', C_PINNEDPUBKEY},
@@ -247,13 +248,15 @@ static const struct LongShort aliases[]= {
   {"proxy-ca-native",            ARG_BOOL|ARG_TLS, ' ', C_PROXY_CA_NATIVE},
   {"proxy-cacert",               ARG_FILE|ARG_TLS, ' ', C_PROXY_CACERT},
   {"proxy-capath",               ARG_FILE|ARG_TLS, ' ', C_PROXY_CAPATH},
-  {"proxy-cert",                ARG_FILE|ARG_TLS|ARG_CLEAR, ' ', C_PROXY_CERT},
+  {"proxy-cert",                 ARG_FILE|ARG_TLS|ARG_CLEAR, ' ',
+   C_PROXY_CERT},
   {"proxy-cert-type",            ARG_STRG|ARG_TLS, ' ', C_PROXY_CERT_TYPE},
   {"proxy-ciphers",              ARG_STRG|ARG_TLS, ' ', C_PROXY_CIPHERS},
   {"proxy-crlfile",              ARG_FILE|ARG_TLS, ' ', C_PROXY_CRLFILE},
   {"proxy-digest",               ARG_BOOL, ' ', C_PROXY_DIGEST},
   {"proxy-header",               ARG_STRG, ' ', C_PROXY_HEADER},
   {"proxy-http2",                ARG_BOOL, ' ', C_PROXY_HTTP2},
+  {"proxy-http3",                ARG_BOOL, ' ', C_PROXY_HTTP3},
   {"proxy-insecure",             ARG_BOOL, ' ', C_PROXY_INSECURE},
   {"proxy-key",                  ARG_FILE|ARG_TLS, ' ', C_PROXY_KEY},
   {"proxy-key-type",             ARG_STRG|ARG_TLS, ' ', C_PROXY_KEY_TYPE},
@@ -267,9 +270,11 @@ static const struct LongShort aliases[]= {
   {"proxy-ssl-auto-client-cert", ARG_BOOL|ARG_TLS, ' ',
    C_PROXY_SSL_AUTO_CLIENT_CERT},
   {"proxy-tls13-ciphers",        ARG_STRG|ARG_TLS, ' ', C_PROXY_TLS13_CIPHERS},
-  {"proxy-tlsauthtype",          ARG_STRG|ARG_TLS, ' ', C_PROXY_TLSAUTHTYPE},
-  {"proxy-tlspassword",  ARG_STRG|ARG_TLS|ARG_CLEAR, ' ', C_PROXY_TLSPASSWORD},
-  {"proxy-tlsuser",          ARG_STRG|ARG_TLS|ARG_CLEAR, ' ', C_PROXY_TLSUSER},
+  {"proxy-tlsauthtype",   ARG_STRG|ARG_TLS|ARG_DEPR, ' ', C_PROXY_TLSAUTHTYPE},
+  {"proxy-tlspassword",          ARG_STRG|ARG_TLS|ARG_CLEAR|ARG_DEPR, ' ',
+   C_PROXY_TLSPASSWORD},
+  {"proxy-tlsuser",              ARG_STRG|ARG_TLS|ARG_CLEAR|ARG_DEPR, ' ',
+   C_PROXY_TLSUSER},
   {"proxy-tlsv1",                ARG_NONE|ARG_TLS, ' ', C_PROXY_TLSV1},
   {"proxy-user",                 ARG_STRG|ARG_CLEAR, 'U', C_PROXY_USER},
   {"proxy1.0",                   ARG_STRG, ' ', C_PROXY1_0},
@@ -289,11 +294,11 @@ static const struct LongShort aliases[]= {
   {"request",                    ARG_STRG, 'X', C_REQUEST},
   {"request-target",             ARG_STRG, ' ', C_REQUEST_TARGET},
   {"resolve",                    ARG_STRG, ' ', C_RESOLVE},
-  {"retry",                      ARG_STRG, ' ', C_RETRY},
+  {"retry",                      ARG_UNUM, ' ', C_RETRY},
   {"retry-all-errors",           ARG_BOOL, ' ', C_RETRY_ALL_ERRORS},
   {"retry-connrefused",          ARG_BOOL, ' ', C_RETRY_CONNREFUSED},
-  {"retry-delay",                ARG_STRG, ' ', C_RETRY_DELAY},
-  {"retry-max-time",             ARG_STRG, ' ', C_RETRY_MAX_TIME},
+  {"retry-delay",                ARG_SECS, ' ', C_RETRY_DELAY},
+  {"retry-max-time",             ARG_SECS, ' ', C_RETRY_MAX_TIME},
   {"sasl-authzid",               ARG_STRG, ' ', C_SASL_AUTHZID},
   {"sasl-ir",                    ARG_BOOL, ' ', C_SASL_IR},
   {"service-name",               ARG_STRG, ' ', C_SERVICE_NAME},
@@ -312,8 +317,8 @@ static const struct LongShort aliases[]= {
   {"socks5-gssapi-nec",          ARG_BOOL, ' ', C_SOCKS5_GSSAPI_NEC},
   {"socks5-gssapi-service",      ARG_STRG, ' ', C_SOCKS5_GSSAPI_SERVICE},
   {"socks5-hostname",            ARG_STRG, ' ', C_SOCKS5_HOSTNAME},
-  {"speed-limit",                ARG_STRG, 'Y', C_SPEED_LIMIT},
-  {"speed-time",                 ARG_STRG, 'y', C_SPEED_TIME},
+  {"speed-limit",                ARG_UNUM, 'Y', C_SPEED_LIMIT},
+  {"speed-time",                 ARG_UNUM, 'y', C_SPEED_TIME},
   {"ssl",                        ARG_BOOL|ARG_TLS, ' ', C_SSL},
   {"ssl-allow-beast",            ARG_BOOL|ARG_TLS, ' ', C_SSL_ALLOW_BEAST},
   {"ssl-auto-client-cert",       ARG_BOOL|ARG_TLS, ' ',
@@ -335,15 +340,15 @@ static const struct LongShort aliases[]= {
   {"test-duphandle",             ARG_BOOL, ' ', C_TEST_DUPHANDLE},
   {"test-event",                 ARG_BOOL, ' ', C_TEST_EVENT},
 #endif
-  {"tftp-blksize",               ARG_STRG, ' ', C_TFTP_BLKSIZE},
+  {"tftp-blksize",               ARG_UNUM, ' ', C_TFTP_BLKSIZE},
   {"tftp-no-options",            ARG_BOOL, ' ', C_TFTP_NO_OPTIONS},
   {"time-cond",                  ARG_STRG, 'z', C_TIME_COND},
   {"tls-earlydata",              ARG_BOOL|ARG_TLS, ' ', C_TLS_EARLYDATA},
   {"tls-max",                    ARG_STRG|ARG_TLS, ' ', C_TLS_MAX},
   {"tls13-ciphers",              ARG_STRG|ARG_TLS, ' ', C_TLS13_CIPHERS},
-  {"tlsauthtype",                ARG_STRG|ARG_TLS, ' ', C_TLSAUTHTYPE},
-  {"tlspassword",              ARG_STRG|ARG_TLS|ARG_CLEAR, ' ', C_TLSPASSWORD},
-  {"tlsuser",                    ARG_STRG|ARG_TLS|ARG_CLEAR, ' ', C_TLSUSER},
+  {"tlsauthtype",               ARG_STRG|ARG_TLS|ARG_DEPR, ' ', C_TLSAUTHTYPE},
+  {"tlspassword",     ARG_STRG|ARG_TLS|ARG_CLEAR|ARG_DEPR, ' ', C_TLSPASSWORD},
+  {"tlsuser",             ARG_STRG|ARG_TLS|ARG_CLEAR|ARG_DEPR, ' ', C_TLSUSER},
   {"tlsv1",                      ARG_NONE|ARG_TLS, '1', C_TLSV1},
   {"tlsv1.0",                    ARG_NONE|ARG_TLS, ' ', C_TLSV1_0},
   {"tlsv1.1",                    ARG_NONE|ARG_TLS, ' ', C_TLSV1_1},
@@ -366,7 +371,7 @@ static const struct LongShort aliases[]= {
   {"variable",                   ARG_STRG, ' ', C_VARIABLE},
   {"verbose",                    ARG_BOOL, 'v', C_VERBOSE},
   {"version",                    ARG_BOOL, 'V', C_VERSION},
-  {"vlan-priority",              ARG_STRG, ' ', C_VLAN_PRIORITY},
+  {"vlan-priority",              ARG_UNUM, ' ', C_VLAN_PRIORITY},
 #ifdef USE_WATT32
   {"wdebug",                     ARG_BOOL, ' ', C_WDEBUG},
 #endif
@@ -381,10 +386,9 @@ static const struct LongShort aliases[]= {
  *
  * Unit test 1394
  */
-UNITTEST
-ParameterError parse_cert_parameter(const char *cert_parameter,
-                                    char **certname,
-                                    char **passphrase)
+UNITTEST ParameterError parse_cert_parameter(const char *cert_parameter,
+                                             char **certname,
+                                             char **passphrase)
 {
   size_t param_length = strlen(cert_parameter);
   size_t span;
@@ -423,7 +427,7 @@ ParameterError parse_cert_parameter(const char *cert_parameter,
     memcpy(certname_place, param_place, span);
     param_place += span;
     certname_place += span;
-    /* we just ate all the non-special chars. now we are on either a special
+    /* we ate all the non-special chars. now we are on either a special
      * char or the end of the string. */
     switch(*param_place) {
     case '\0':
@@ -458,7 +462,7 @@ ParameterError parse_cert_parameter(const char *cert_parameter,
 #ifdef _WIN32
       if((param_place == &cert_parameter[1]) &&
          (cert_parameter[2] == '\\' || cert_parameter[2] == '/') &&
-         (ISALPHA(cert_parameter[0]))) {
+         ISALPHA(cert_parameter[0])) {
         /* colon in the second column, followed by a backslash, and the
            first character is an alphabetic letter:
 
@@ -481,7 +485,7 @@ ParameterError parse_cert_parameter(const char *cert_parameter,
   }
 done:
   if(err) {
-    tool_safefree(*certname);
+    curlx_safefree(*certname);
   }
   else
     *certname_place = '\0';
@@ -534,54 +538,93 @@ static ParameterError GetFileAndPassword(const char *nextarg, char **file,
   return err;
 }
 
+struct sizeunit {
+  char unit; /* single lowercase ASCII letter */
+  curl_off_t mul;
+  size_t mlen; /* number of digits in 'mul', when written in decimal */
+};
+
+static const struct sizeunit *getunit(char unit)
+{
+  static const struct sizeunit list[] = {
+    { 'p', (curl_off_t)1125899906842624, 16 }, /* Peta */
+    { 't', (curl_off_t)1099511627776,    13 }, /* Tera */
+    { 'g', 1073741824,                   10 }, /* Giga */
+    { 'm', 1048576,                       7 }, /* Mega */
+    { 'k', 1024,                          4 }, /* Kilo */
+  };
+
+  size_t i;
+  for(i = 0; i < CURL_ARRAYSIZE(list); i++)
+    if((unit | 0x20) == list[i].unit)
+      return &list[i];
+  return NULL;
+}
+
 /* Get a size parameter for '--limit-rate' or '--max-filesize'.
- * We support a 'G', 'M' or 'K' suffix too.
-  */
-static ParameterError GetSizeParameter(const char *arg,
-                                       const char *which,
-                                       curl_off_t *value_out)
+   We support P, T, G, M and K (case insensitive) suffixes.
+
+   Unit test 1623
+ */
+UNITTEST ParameterError GetSizeParameter(const char *arg, curl_off_t *out)
 {
   const char *unit = arg;
   curl_off_t value;
+  curl_off_t prec = 0;
+  size_t plen = 0;
+  curl_off_t add = 0;
+  curl_off_t mul = 1;
+  int rc;
 
-  if(curlx_str_number(&unit, &value, CURL_OFF_T_MAX)) {
-    warnf("invalid number specified for %s", which);
-    return PARAM_BAD_USE;
+  rc = curlx_str_number(&unit, &value, CURL_OFF_T_MAX);
+  if(rc == STRE_OVERFLOW)
+    return PARAM_NUMBER_TOO_LARGE;
+  else if(rc)
+    return PARAM_BAD_NUMERIC;
+
+  if(!curlx_str_single(&unit, '.')) {
+    const char *s = unit;
+    if(curlx_str_number(&unit, &prec, CURL_OFF_T_MAX))
+      return PARAM_BAD_NUMERIC;
+    plen = unit - s;
   }
 
-  if(!*unit)
-    unit = "b";
-  else if(strlen(unit) > 1)
-    unit = "w"; /* unsupported */
-
-  switch(*unit) {
-  case 'G':
-  case 'g':
-    if(value > (CURL_OFF_T_MAX / (1024 * 1024 * 1024)))
-      return PARAM_NUMBER_TOO_LARGE;
-    value *= 1024 * 1024 * 1024;
-    break;
-  case 'M':
-  case 'm':
-    if(value > (CURL_OFF_T_MAX / (1024 * 1024)))
-      return PARAM_NUMBER_TOO_LARGE;
-    value *= 1024 * 1024;
-    break;
-  case 'K':
-  case 'k':
-    if(value > (CURL_OFF_T_MAX / 1024))
-      return PARAM_NUMBER_TOO_LARGE;
-    value *= 1024;
-    break;
-  case 'b':
-  case 'B':
-    /* for plain bytes, leave as-is */
-    break;
-  default:
-    warnf("unsupported %s unit. Use G, M, K or B", which);
+  if(strlen(unit) > 1)
     return PARAM_BAD_USE;
+  else if(!*unit || ((*unit | 0x20) == 'b')) {
+    if(plen)
+      /* cannot handle partial bytes */
+      return PARAM_BAD_USE;
   }
-  *value_out = value;
+  else {
+    const struct sizeunit *su = getunit(*unit);
+    if(!su)
+      return PARAM_BAD_USE;
+    mul = su->mul;
+
+    if(prec) {
+      /* precision was provided */
+      curl_off_t frac = 1;
+
+      /* too many precision digits, trim them */
+      while(su->mlen <= plen) {
+        prec /= 10;
+        plen--;
+      }
+
+      while(plen--)
+        frac *= 10;
+
+      if((CURL_OFF_T_MAX / mul) > prec)
+        add = mul * prec / frac;
+      else
+        add = (mul / frac) * prec;
+    }
+  }
+  if(value > ((CURL_OFF_T_MAX - add) / mul))
+    return PARAM_NUMBER_TOO_LARGE;
+
+  *out = (value * mul) + add;
   return PARAM_OK;
 }
 
@@ -638,7 +681,7 @@ static ParameterError data_urlencode(const char *nextarg,
     /* a '@' letter, it means that a filename or - (stdin) follows */
     if(!strcmp("-", p)) {
       file = stdin;
-      CURLX_SET_BINMODE(stdin);
+      CURL_BINMODE(stdin);
     }
     else {
       file = curlx_fopen(p, "rb");
@@ -672,7 +715,7 @@ static ParameterError data_urlencode(const char *nextarg,
   }
   else {
     char *enc = curl_easy_escape(NULL, postdata, (int)size);
-    tool_safefree(postdata); /* no matter if it worked or not */
+    curlx_safefree(postdata); /* no matter if it worked or not */
     if(enc) {
       char *n;
       replace_url_encoded_space_by_plus(enc);
@@ -690,7 +733,11 @@ static ParameterError data_urlencode(const char *nextarg,
         size = curlx_dyn_len(&dyn);
       }
       else {
-        n = enc;
+        /* make sure we return "our memory" */
+        n = curlx_strdup(enc);
+        curl_free(enc);
+        if(!n)
+          return PARAM_NO_MEM;
         size = strlen(n);
       }
       postdata = n;
@@ -912,7 +959,7 @@ static ParameterError set_data(cmdline_t cmd,
     if(!strcmp("-", nextarg)) {
       file = stdin;
       if(cmd == C_DATA_BINARY) /* forced data-binary */
-        CURLX_SET_BINMODE(stdin);
+        CURL_BINMODE(stdin);
     }
     else {
       file = curlx_fopen(nextarg, "rb");
@@ -964,7 +1011,7 @@ static ParameterError set_data(cmdline_t cmd,
   if(!err && curlx_dyn_addn(&config->postdata, postdata, size))
     err = PARAM_NO_MEM;
 
-  tool_safefree(postdata);
+  curlx_safefree(postdata);
 
   config->postfields = curlx_dyn_ptr(&config->postdata);
   return err;
@@ -979,7 +1026,7 @@ static ParameterError set_rate(const char *nextarg)
      /m == per minute
      /h == per hour (default)
      /d == per day (24 hours)
-  */
+   */
   ParameterError err = PARAM_OK;
   const char *p = nextarg;
   curl_off_t denominator;
@@ -1219,21 +1266,27 @@ static ParameterError parse_ech(struct OperationConfig *config,
         warnf("Could not read file \"%s\" "
               "specified for \"--ech ecl:\" option",
               nextarg);
-        return PARAM_BAD_USE; /*  */
+        return PARAM_BAD_USE;
       }
       err = file2string(&tmpcfg, file);
       if(file != stdin)
         curlx_fclose(file);
       if(err)
         return err;
-      config->ech_config = curl_maprintf("ecl:%s", tmpcfg);
-      curlx_free(tmpcfg);
-      if(!config->ech_config)
-        return PARAM_NO_MEM;
+      {
+        char *tmp = curl_maprintf("ecl:%s", tmpcfg);
+        curlx_free(tmpcfg);
+        if(!tmp)
+          return PARAM_NO_MEM;
+        config->ech_config = curlx_strdup(tmp);
+        curl_free(tmp);
+        if(!config->ech_config)
+          return PARAM_NO_MEM;
+      }
     } /* file done */
   }
   else {
-    /* Simple case: just a string, with a keyword */
+    /* Simple case: a string, with a keyword */
     err = getstr(&config->ech, nextarg, DENY_BLANK);
   }
   return err;
@@ -1378,7 +1431,7 @@ static ParameterError parse_quote(struct OperationConfig *config,
     err = add2list(&config->postquote, nextarg);
     break;
   case '+':
-    /* prefixed with a plus makes it a just-before-transfer one */
+    /* prefixed with a plus makes it an immediately-before-transfer one */
     nextarg++;
     err = add2list(&config->prequote, nextarg);
     break;
@@ -1402,9 +1455,9 @@ static ParameterError parse_range(struct OperationConfig *config,
   }
   if(!curlx_str_number(&nextarg, &value, CURL_OFF_T_MAX) &&
      curlx_str_single(&nextarg, '-')) {
-    /* Specifying a range WITHOUT A DASH will create an illegal HTTP range
-       (and will not actually be range by definition). The man page previously
-       claimed that to be a good way, why this code is added to work-around
+    /* Specifying a range WITHOUT A DASH does create an illegal HTTP range
+       (and does not actually be range by definition). The man page previously
+       claimed that to be a good way, why this code is added to work around
        it. */
     char buffer[32];
     warnf("A specified range MUST include at least one dash (-). "
@@ -1492,7 +1545,7 @@ static ParameterError parse_verbose(bool toggle)
     if(!global->trace_set && set_trace_config("-all"))
       return PARAM_NO_MEM;
   }
-  /* the '%' thing here will cause the trace get sent to stderr */
+  /* the '%' thing here causes the trace get sent to stderr */
   switch(global->verbosity) {
   case 0:
     global->verbosity = 1;
@@ -1553,7 +1606,7 @@ static ParameterError parse_writeout(struct OperationConfig *config,
         return PARAM_READ_ERROR;
       }
     }
-    tool_safefree(config->writeout);
+    curlx_safefree(config->writeout);
     err = file2string(&config->writeout, file);
     if(file && (file != stdin))
       curlx_fclose(file);
@@ -1582,12 +1635,12 @@ static ParameterError parse_time_cond(struct OperationConfig *config,
     config->timecond = CURL_TIMECOND_IFMODSINCE;
     break;
   case '-':
-    /* If-Unmodified-Since:  (section 14.24 in RFC2068) */
+    /* If-Unmodified-Since: (section 14.24 in RFC2068) */
     config->timecond = CURL_TIMECOND_IFUNMODSINCE;
     nextarg++;
     break;
   case '=':
-    /* Last-Modified:  (section 14.29 in RFC2068) */
+    /* Last-Modified: (section 14.29 in RFC2068) */
     config->timecond = CURL_TIMECOND_LASTMOD;
     nextarg++;
     break;
@@ -1635,7 +1688,7 @@ static ParameterError parse_upload_flags(struct OperationConfig *config,
     bool negate;
     const struct flagmap *map;
     size_t len;
-    char *next = strchr(flag, ','); /* Find next comma or end */
+    const char *next = strchr(flag, ','); /* Find next comma or end */
     if(next)
       len = next - flag;
     else
@@ -1672,8 +1725,7 @@ static ParameterError parse_upload_flags(struct OperationConfig *config,
 }
 
 /* if 'toggle' is TRUE, set the 'bits' in 'modify'.
-   if 'toggle' is FALSE, clear the 'bits' in 'modify'
-*/
+   if 'toggle' is FALSE, clear the 'bits' in 'modify' */
 static void togglebit(bool toggle, unsigned long *modify, unsigned long bits)
 {
   if(toggle)
@@ -1712,7 +1764,7 @@ static ParameterError opt_none(struct OperationConfig *config,
   case C_DUMP_CA_EMBED: /* --dump-ca-embed */
     return PARAM_CA_EMBED_REQUESTED;
   case C_FTP_PASV: /* --ftp-pasv */
-    tool_safefree(config->ftpport);
+    curlx_safefree(config->ftpport);
     break;
 
   case C_HTTP1_0: /* --http1.0 */
@@ -1863,6 +1915,10 @@ static ParameterError opt_bool(struct OperationConfig *config,
     if(config->ftp_ssl)
       warnf("--%s is an insecure option, consider --ssl-reqd instead",
             a->lname);
+    if(toggle && config->ftp_ssl_control) {
+      config->ftp_ssl_control = FALSE;
+      warnf("--%s overrides --ftp-ssl-control", a->lname);
+    }
     break;
   case C_FTP_SSL_CCC: /* --ftp-ssl-ccc */
     config->ftp_ssl_ccc = toggle;
@@ -1914,6 +1970,10 @@ static ParameterError opt_bool(struct OperationConfig *config,
     break;
   case C_FTP_SSL_CONTROL: /* --ftp-ssl-control */
     config->ftp_ssl_control = toggle;
+    if(toggle && config->ftp_ssl) {
+      config->ftp_ssl = FALSE;
+      warnf("--%s overrides --ssl", a->lname);
+    }
     break;
   case C_RAW: /* --raw */
     config->raw = toggle;
@@ -1979,6 +2039,18 @@ static ParameterError opt_bool(struct OperationConfig *config,
       return PARAM_LIBCURL_DOESNT_SUPPORT;
 
     config->proxyver = toggle ? CURLPROXY_HTTPS2 : CURLPROXY_HTTPS;
+    break;
+  case C_PROXY_HTTP3: /* --proxy-http3 */
+#ifndef USE_PROXY_HTTP3
+    if(toggle)
+      return PARAM_LIBCURL_DOESNT_SUPPORT;
+    config->proxyver = CURLPROXY_HTTPS;
+#else
+    if(!feature_httpsproxy || !feature_http3)
+      return PARAM_LIBCURL_DOESNT_SUPPORT;
+
+    config->proxyver = toggle ? CURLPROXY_HTTPS3 : CURLPROXY_HTTPS;
+#endif
     break;
   case C_APPEND: /* --append */
     config->ftp_append = toggle;
@@ -2073,7 +2145,7 @@ static ParameterError opt_bool(struct OperationConfig *config,
   case C_HEAD: /* --head */
     config->no_body = toggle;
     config->show_headers = toggle;
-    if(SetHTTPrequest((config->no_body) ? TOOL_HTTPREQ_HEAD :
+    if(SetHTTPrequest(config->no_body ? TOOL_HTTPREQ_HEAD :
                       TOOL_HTTPREQ_GET, &config->httpreq))
       return PARAM_BAD_USE;
     break;
@@ -2171,7 +2243,7 @@ static ParameterError existingfile(char **store,
                                    const struct LongShort *a,
                                    const char *filename)
 {
-  struct_stat info;
+  curlx_struct_stat info;
   if(curlx_stat(filename, &info)) {
     errorf("The file '%s' provided to --%s does not exist",
            filename, a->lname);
@@ -2207,7 +2279,7 @@ static ParameterError opt_file(struct OperationConfig *config,
     break;
   case C_CONFIG: /* --config */
     if(--max_recursive < 0) {
-      errorf("Max config file recursion level reached (%u)",
+      errorf("Max config file recursion level reached (%d)",
              CONFIG_MAX_LEVELS);
       err = PARAM_BAD_USE;
     }
@@ -2297,6 +2369,114 @@ static ParameterError opt_file(struct OperationConfig *config,
   case C_UPLOAD_FILE: /* --upload-file */
     err = parse_upload_file(config, nextarg);
     break;
+  case C_HTTPSIG_KEY: /* --httpsig-key */
+    if(!feature_httpsig)
+      err = PARAM_LIBCURL_DOESNT_SUPPORT;
+    else
+      err = getstr(&config->httpsig_key, nextarg, DENY_BLANK);
+    break;
+  }
+  return err;
+}
+
+/* options that accept unsigned numbers */
+static ParameterError opt_unum(struct OperationConfig *config,
+                               const struct LongShort *a,
+                               const char *nextarg)
+{
+  ParameterError err = PARAM_OK;
+  long val;
+  err = str2unum(&val, nextarg);
+  if(err)
+    return err;
+  switch(a->cmd) {
+  case C_VLAN_PRIORITY: /* --vlan-priority */
+    if(val > 7)
+      return PARAM_NUMBER_TOO_LARGE;
+    config->vlan_priority = val;
+    break;
+  case C_RETRY: /* --retry */
+    config->req_retry = val;
+    break;
+  case C_KEEPALIVE_TIME: /* --keepalive-time */
+    config->alivetime = val;
+    break;
+  case C_KEEPALIVE_CNT: /* --keepalive-cnt */
+    config->alivecnt = val;
+    break;
+  case C_TFTP_BLKSIZE: /* --tftp-blksize */
+    config->tftp_blksize = val;
+    break;
+  case C_HAPPY_EYEBALLS_TIMEOUT_MS: /* --happy-eyeballs-timeout-ms */
+    config->happy_eyeballs_timeout_ms = val;
+    /* 0 is a valid value for this timeout */
+    break;
+  case C_SPEED_TIME: /* --speed-time */
+    /* low speed time */
+    config->low_speed_time = val;
+    if(!config->low_speed_limit)
+      config->low_speed_limit = 1;
+    break;
+  case C_SPEED_LIMIT: /* --speed-limit */
+    /* low speed limit */
+    config->low_speed_limit = val;
+    if(!config->low_speed_time)
+      config->low_speed_time = 30;
+    break;
+  case C_PARALLEL_HOST: /* --parallel-max-host */
+    if(val > MAX_PARALLEL_HOST)
+      global->parallel_host = MAX_PARALLEL_HOST;
+    else if(val < 1)
+      global->parallel_host = PARALLEL_HOST_DEFAULT;
+    else
+      global->parallel_host = (unsigned short)val;
+    break;
+  case C_PARALLEL_MAX:  /* --parallel-max */
+    if(val > MAX_PARALLEL)
+      global->parallel_max = MAX_PARALLEL;
+    else if(val < 1)
+      global->parallel_max = PARALLEL_DEFAULT;
+    else
+      global->parallel_max = (unsigned short)val;
+    break;
+  default:
+    DEBUGASSERT(0);
+    return PARAM_OPTION_UNKNOWN;
+  }
+  return err;
+}
+
+/* handle options that accept seconds */
+static ParameterError opt_secs(struct OperationConfig *config,
+                               const struct LongShort *a,
+                               const char *nextarg)
+{
+  long val;
+  ParameterError err = secs2ms(&val, nextarg);
+  if(err)
+    return err;
+  switch(a->cmd) {
+  case C_CONNECT_TIMEOUT: /* --connect-timeout */
+    config->connecttimeout_ms = val;
+    break;
+  case C_RETRY_DELAY: /* --retry-delay */
+    if(val >= INT32_MAX)
+      val = INT32_MAX;
+    config->retry_delay_ms = (uint32_t)val;
+    break;
+  case C_RETRY_MAX_TIME: /* --retry-max-time */
+    config->retry_maxtime_ms = val;
+    break;
+  case C_EXPECT100_TIMEOUT: /* --expect100-timeout */
+    config->expect100timeout_ms = val;
+    break;
+  case C_MAX_TIME: /* --max-time */
+    /* specified max time */
+    config->timeout_ms = val;
+    break;
+  default:
+    DEBUGASSERT(0);
+    return PARAM_OPTION_UNKNOWN;
   }
   return err;
 }
@@ -2308,8 +2488,7 @@ static ParameterError opt_string(struct OperationConfig *config,
 {
   ParameterError err = PARAM_OK;
   curl_off_t value;
-  long val;
-  static const char *redir_protos[] = {
+  static const char * const redir_protos[] = {
     "http",
     "https",
     "ftp",
@@ -2336,14 +2515,11 @@ static ParameterError opt_string(struct OperationConfig *config,
     config->authtype |= CURLAUTH_BEARER;
     return getstr(&config->oauth_bearer, nextarg, DENY_BLANK);
 
-  case C_CONNECT_TIMEOUT: /* --connect-timeout */
-    return secs2ms(&config->connecttimeout_ms, nextarg);
-
   case C_DOH_URL: /* --doh-url */
     err = getstr(&config->doh_url, nextarg, ALLOW_BLANK);
     if(!err && config->doh_url && !config->doh_url[0])
       /* if given a blank string, make it NULL again */
-      tool_safefree(config->doh_url);
+      curlx_safefree(config->doh_url);
     break;
 
   case C_CIPHERS: /* -- ciphers */
@@ -2365,7 +2541,7 @@ static ParameterError opt_string(struct OperationConfig *config,
       err = getstr(&config->dns_servers, nextarg, DENY_BLANK);
     break;
   case C_LIMIT_RATE: /* --limit-rate */
-    err = GetSizeParameter(nextarg, "rate", &value);
+    err = GetSizeParameter(nextarg, &value);
     if(!err) {
       config->recvpersecond = value;
       config->sendpersecond = value;
@@ -2388,10 +2564,30 @@ static ParameterError opt_string(struct OperationConfig *config,
   case C_IPFS_GATEWAY: /* --ipfs-gateway */
     err = getstr(&config->ipfs_gateway, nextarg, DENY_BLANK);
     break;
-#endif /* !CURL_DISABLE_IPFS */
+#endif
   case C_AWS_SIGV4: /* --aws-sigv4 */
     config->authtype |= CURLAUTH_AWS_SIGV4;
     err = getstr(&config->aws_sigv4, nextarg, ALLOW_BLANK);
+    break;
+  case C_HTTPSIG_ALGORITHM: /* --httpsig-algo */
+    if(!feature_httpsig)
+      err = PARAM_LIBCURL_DOESNT_SUPPORT;
+    else {
+      config->authtype |= CURLAUTH_HTTPSIG;
+      err = getstr(&config->httpsig_algorithm, nextarg, DENY_BLANK);
+    }
+    break;
+  case C_HTTPSIG_KEYID: /* --httpsig-keyid */
+    if(!feature_httpsig)
+      err = PARAM_LIBCURL_DOESNT_SUPPORT;
+    else
+      err = getstr(&config->httpsig_keyid, nextarg, DENY_BLANK);
+    break;
+  case C_HTTPSIG_HEADERS: /* --httpsig-headers */
+    if(!feature_httpsig)
+      err = PARAM_LIBCURL_DOESNT_SUPPORT;
+    else
+      err = getstr(&config->httpsig_headers, nextarg, DENY_BLANK);
     break;
   case C_INTERFACE: /* --interface */
     /* interface */
@@ -2401,7 +2597,7 @@ static ParameterError opt_string(struct OperationConfig *config,
     err = getstr(&config->haproxy_clientip, nextarg, DENY_BLANK);
     break;
   case C_MAX_FILESIZE: /* --max-filesize */
-    err = GetSizeParameter(nextarg, "max-filesize", &value);
+    err = GetSizeParameter(nextarg, &value);
     if(!err)
       config->max_filesize = value;
     break;
@@ -2439,18 +2635,6 @@ static ParameterError opt_string(struct OperationConfig *config,
       err = str2unummax(&config->ip_tos, nextarg, 0xFF);
     break;
   }
-  case C_VLAN_PRIORITY: /* --vlan-priority */
-    err = str2unummax(&config->vlan_priority, nextarg, 7);
-    break;
-  case C_RETRY: /* --retry */
-    err = str2unum(&config->req_retry, nextarg);
-    break;
-  case C_RETRY_DELAY: /* --retry-delay */
-    err = secs2ms(&config->retry_delay_ms, nextarg);
-    break;
-  case C_RETRY_MAX_TIME: /* --retry-max-time */
-    err = secs2ms(&config->retry_maxtime_ms, nextarg);
-    break;
   case C_FTP_ACCOUNT: /* --ftp-account */
     err = getstr(&config->ftp_account, nextarg, DENY_BLANK);
     break;
@@ -2471,12 +2655,6 @@ static ParameterError opt_string(struct OperationConfig *config,
     err = getstr(&global->libcurl, nextarg, DENY_BLANK);
 #endif
     break;
-  case C_KEEPALIVE_TIME: /* --keepalive-time */
-    err = str2unum(&config->alivetime, nextarg);
-    break;
-  case C_KEEPALIVE_CNT: /* --keepalive-cnt */
-    err = str2unum(&config->alivecnt, nextarg);
-    break;
   case C_NOPROXY: /* --noproxy */
     /* This specifies the noproxy list */
     err = getstr(&config->noproxy, nextarg, ALLOW_BLANK);
@@ -2485,9 +2663,6 @@ static ParameterError opt_string(struct OperationConfig *config,
     /* http 1.0 proxy */
     err = getstr(&config->proxy, nextarg, DENY_BLANK);
     config->proxyver = CURLPROXY_HTTP_1_0;
-    break;
-  case C_TFTP_BLKSIZE: /* --tftp-blksize */
-    err = str2unum(&config->tftp_blksize, nextarg);
     break;
   case C_MAIL_FROM: /* --mail-from */
     err = getstr(&config->mail_from, nextarg, DENY_BLANK);
@@ -2528,9 +2703,6 @@ static ParameterError opt_string(struct OperationConfig *config,
     if(!err)
       err = check_protocol(config->proto_default);
     break;
-  case C_EXPECT100_TIMEOUT: /* --expect100-timeout */
-    err = secs2ms(&config->expect100timeout_ms, nextarg);
-    break;
   case C_CONNECT_TO: /* --connect-to */
     err = add2list(&config->connect_to, nextarg);
     break;
@@ -2540,10 +2712,6 @@ static ParameterError opt_string(struct OperationConfig *config,
       errorf("--tls-max set lower than minimum accepted version");
       err = PARAM_BAD_USE;
     }
-    break;
-  case C_HAPPY_EYEBALLS_TIMEOUT_MS: /* --happy-eyeballs-timeout-ms */
-    err = str2unum(&config->happy_eyeballs_timeout_ms, nextarg);
-    /* 0 is a valid value for this timeout */
     break;
   case C_TRACE_CONFIG: /* --trace-config */
     global->trace_set = TRUE;
@@ -2617,7 +2785,7 @@ static ParameterError opt_string(struct OperationConfig *config,
     if(len)
       err = getstrn(&config->referer, nextarg, len, ALLOW_BLANK);
     else
-      tool_safefree(config->referer);
+      curlx_safefree(config->referer);
   }
     break;
   case C_CERT_TYPE: /* --cert-type */
@@ -2650,59 +2818,13 @@ static ParameterError opt_string(struct OperationConfig *config,
     }
     break;
   case C_HOSTPUBSHA256: /* --hostpubsha256 */
-    if(!feature_libssh2)
-      err = PARAM_LIBCURL_DOESNT_SUPPORT;
-    else
-      err = getstr(&config->hostpubsha256, nextarg, DENY_BLANK);
-    break;
-  case C_TLSUSER: /* --tlsuser */
-    if(!feature_tls_srp)
-      err = PARAM_LIBCURL_DOESNT_SUPPORT;
-    else
-      err = getstr(&config->tls_username, nextarg, DENY_BLANK);
-    break;
-  case C_TLSPASSWORD: /* --tlspassword */
-    if(!feature_tls_srp)
-      err = PARAM_LIBCURL_DOESNT_SUPPORT;
-    else
-      err = getstr(&config->tls_password, nextarg, ALLOW_BLANK);
-    break;
-  case C_TLSAUTHTYPE: /* --tlsauthtype */
-    if(!feature_tls_srp)
-      err = PARAM_LIBCURL_DOESNT_SUPPORT;
-    else {
-      err = getstr(&config->tls_authtype, nextarg, DENY_BLANK);
-      if(!err && config->tls_authtype && strcmp(config->tls_authtype, "SRP"))
-        err = PARAM_LIBCURL_DOESNT_SUPPORT; /* only support TLS-SRP */
-    }
+    err = getstr(&config->hostpubsha256, nextarg, DENY_BLANK);
     break;
   case C_PINNEDPUBKEY: /* --pinnedpubkey */
     err = getstr(&config->pinnedpubkey, nextarg, DENY_BLANK);
     break;
   case C_PROXY_PINNEDPUBKEY: /* --proxy-pinnedpubkey */
     err = getstr(&config->proxy_pinnedpubkey, nextarg, DENY_BLANK);
-    break;
-  case C_PROXY_TLSUSER: /* --proxy-tlsuser */
-    if(!feature_tls_srp)
-      err = PARAM_LIBCURL_DOESNT_SUPPORT;
-    else
-      err = getstr(&config->proxy_tls_username, nextarg, ALLOW_BLANK);
-    break;
-  case C_PROXY_TLSPASSWORD: /* --proxy-tlspassword */
-    if(!feature_tls_srp)
-      err = PARAM_LIBCURL_DOESNT_SUPPORT;
-    else
-      err = getstr(&config->proxy_tls_password, nextarg, DENY_BLANK);
-    break;
-  case C_PROXY_TLSAUTHTYPE: /* --proxy-tlsauthtype */
-    if(!feature_tls_srp)
-      err = PARAM_LIBCURL_DOESNT_SUPPORT;
-    else {
-      err = getstr(&config->proxy_tls_authtype, nextarg, DENY_BLANK);
-      if(!err && config->proxy_tls_authtype &&
-         strcmp(config->proxy_tls_authtype, "SRP"))
-        err = PARAM_LIBCURL_DOESNT_SUPPORT; /* only support TLS-SRP */
-    }
     break;
   case C_PROXY_CERT_TYPE: /* --proxy-cert-type */
     err = getstr(&config->proxy_cert_type, nextarg, DENY_BLANK);
@@ -2742,19 +2864,15 @@ static ParameterError opt_string(struct OperationConfig *config,
   case C_PROXY_HEADER: /* --proxy-header */
     err = parse_header(config, (cmdline_t)a->cmd, nextarg);
     break;
-  case C_MAX_TIME: /* --max-time */
-    /* specified max time */
-    err = secs2ms(&config->timeout_ms, nextarg);
-    break;
   case C_OUTPUT_DIR: /* --output-dir */
     err = getstr(&config->output_dir, nextarg, DENY_BLANK);
     break;
   case C_FTP_PORT: /* --ftp-port */
     /* This makes the FTP sessions use PORT instead of PASV */
     /* use <eth0> or <192.168.10.10> style addresses. Anything except
-       this will make us try to get the "default" address.
+       this makes us try to get the "default" address.
        NOTE: this is a changed behavior since the released 4.1!
-    */
+     */
     err = getstr(&config->ftpport, nextarg, DENY_BLANK);
     break;
   case C_FTP_SSL_CCC_MODE: /* --ftp-ssl-ccc-mode */
@@ -2772,11 +2890,11 @@ static ParameterError opt_string(struct OperationConfig *config,
     err = add2list(&config->telnet_options, nextarg);
     break;
   case C_USER: /* --user */
-    /* user:password  */
+    /* user:password */
     err = getstr(&config->userpwd, nextarg, ALLOW_BLANK);
     break;
   case C_PROXY_USER: /* --proxy-user */
-    /* Proxy user:password  */
+    /* Proxy user:password */
     err = getstr(&config->proxyuserpwd, nextarg, ALLOW_BLANK);
     break;
   case C_WRITE_OUT: /* --write-out */
@@ -2788,46 +2906,13 @@ static ParameterError opt_string(struct OperationConfig *config,
   case C_PROXY: /* --proxy */
     /* --proxy */
     err = getstr(&config->proxy, nextarg, ALLOW_BLANK);
-    if(config->proxyver != CURLPROXY_HTTPS2)
+    if(config->proxyver != CURLPROXY_HTTPS2 &&
+                config->proxyver != CURLPROXY_HTTPS3)
       config->proxyver = CURLPROXY_HTTP;
     break;
   case C_REQUEST: /* --request */
     /* set custom request */
     err = getstr(&config->customrequest, nextarg, DENY_BLANK);
-    break;
-  case C_SPEED_TIME: /* --speed-time */
-    /* low speed time */
-    err = str2unum(&config->low_speed_time, nextarg);
-    if(!err && !config->low_speed_limit)
-      config->low_speed_limit = 1;
-    break;
-  case C_SPEED_LIMIT: /* --speed-limit */
-    /* low speed limit */
-    err = str2unum(&config->low_speed_limit, nextarg);
-    if(!err && !config->low_speed_time)
-      config->low_speed_time = 30;
-    break;
-  case C_PARALLEL_HOST: /* --parallel-max-host */
-    err = str2unum(&val, nextarg);
-    if(err)
-      break;
-    if(val > MAX_PARALLEL_HOST)
-      global->parallel_host = MAX_PARALLEL_HOST;
-    else if(val < 1)
-      global->parallel_host = PARALLEL_HOST_DEFAULT;
-    else
-      global->parallel_host = (unsigned short)val;
-    break;
-  case C_PARALLEL_MAX:  /* --parallel-max */
-    err = str2unum(&val, nextarg);
-    if(err)
-      break;
-    if(val > MAX_PARALLEL)
-      global->parallel_max = MAX_PARALLEL;
-    else if(val < 1)
-      global->parallel_max = PARALLEL_DEFAULT;
-    else
-      global->parallel_max = (unsigned short)val;
     break;
   case C_TIME_COND: /* --time-cond */
     err = parse_time_cond(config, nextarg);
@@ -2842,7 +2927,7 @@ static ParameterError opt_string(struct OperationConfig *config,
 /* detect e2 80 80 - e2 80 ff */
 static bool has_leading_unicode(const unsigned char *arg)
 {
-  return ((arg[0] == 0xe2) && (arg[1] == 0x80) && (arg[2] & 0x80));
+  return (arg[0] == 0xe2) && (arg[1] == 0x80) && (arg[2] & 0x80);
 }
 
 /* the longest command line option, excluding the leading -- */
@@ -2919,9 +3004,8 @@ ParameterError getparameter(const char *flag, /* f or -long-flag */
       struct dynbuf nbuf;
       bool replaced;
 
-      if((ARGTYPE(a->desc) != ARG_STRG) &&
-         (ARGTYPE(a->desc) != ARG_FILE)) {
-        /* --expand on an option that is not a string or a filename */
+      if(ARGTYPE(a->desc) < ARG_STRG) {
+        /* --expand on an option that does not take an argument */
         err = PARAM_EXPAND_ERROR;
         goto error;
       }
@@ -2975,6 +3059,8 @@ ParameterError getparameter(const char *flag, /* f or -long-flag */
         *usedarg = consumearg; /* mark it as used */
       }
       if(a->desc & ARG_DEPR) {
+        if(a->desc & ARG_CLEAR)
+          cleanarg(CURL_UNCONST(nextarg));
         opt_depr(a);
         break;
       }
@@ -2983,10 +3069,24 @@ ParameterError getparameter(const char *flag, /* f or -long-flag */
         warnf("The argument '%s' starts with a Unicode character. "
               "Maybe ASCII was intended?", nextarg);
       }
-      if(ARGTYPE(a->desc) == ARG_FILE)
+      switch(ARGTYPE(a->desc)) {
+      case ARG_FILE:
         err = opt_file(config, a, nextarg, max_recursive);
-      else /* if(ARGTYPE(a->desc) == ARG_STRG) */
+        break;
+      case ARG_STRG:
         err = opt_string(config, a, nextarg);
+        break;
+      case ARG_SECS:
+        err = opt_secs(config, a, nextarg);
+        break;
+      case ARG_UNUM:
+        err = opt_unum(config, a, nextarg);
+        break;
+      default:
+        DEBUGASSERT(0);
+        err = PARAM_OPTION_UNKNOWN;
+        break;
+      }
       if(a->desc & ARG_CLEAR)
         cleanarg(CURL_UNCONST(nextarg));
     }
@@ -3017,10 +3117,11 @@ ParameterError parse_args(int argc, argv_item_t argv[])
   int i;
   bool stillflags;
   const char *orig_opt = NULL;
-  ParameterError result = PARAM_OK;
+  ParameterError err = PARAM_OK;
   struct OperationConfig *config = global->first;
 
-  for(i = 1, stillflags = TRUE; i < argc && !result; i++) {
+  stillflags = TRUE;
+  for(i = 1; i < argc && !err; i++) {
     orig_opt = convert_tchar_to_UTF8(argv[i]);
     if(!orig_opt)
       return PARAM_NO_MEM;
@@ -3042,15 +3143,15 @@ ParameterError parse_args(int argc, argv_item_t argv[])
           }
         }
 
-        result = getparameter(orig_opt, nextarg, &passarg, config,
-                              CONFIG_MAX_LEVELS);
+        err = getparameter(orig_opt, nextarg, &passarg, config,
+                           CONFIG_MAX_LEVELS);
 
         unicodefree(CURL_UNCONST(nextarg));
         config = global->last;
-        if(result == PARAM_NEXT_OPERATION) {
-          /* Reset result as PARAM_NEXT_OPERATION is only used here and not
+        if(err == PARAM_NEXT_OPERATION) {
+          /* Reset err as PARAM_NEXT_OPERATION is only used here and not
              returned from this function */
-          result = PARAM_OK;
+          err = PARAM_OK;
 
           if(config->url_list && config->url_list->url) {
             /* Allocate the next config */
@@ -3064,41 +3165,42 @@ ParameterError parse_args(int argc, argv_item_t argv[])
               config = config->next;
             }
             else
-              result = PARAM_NO_MEM;
+              err = PARAM_NO_MEM;
           }
           else {
             errorf("missing URL before --next");
-            result = PARAM_BAD_USE;
+            err = PARAM_BAD_USE;
           }
         }
-        else if(!result && passarg)
+        else if(!err && passarg)
           i++; /* we are supposed to skip this */
       }
     }
     else {
       bool used;
 
-      /* Just add the URL please */
-      result = getparameter("--url", orig_opt, &used, config, 0);
+      /* add the URL please */
+      err = getparameter("--url", orig_opt, &used, config, 0);
     }
 
-    if(!result) {
+    if(!err) {
       unicodefree(CURL_UNCONST(orig_opt));
       orig_opt = NULL;
     }
   }
 
-  if(!result && config->content_disposition) {
+  if(!err && config->content_disposition) {
     if(config->resume_from_current)
-      result = PARAM_CONTDISP_RESUME_FROM;
+      err = PARAM_CONTDISP_RESUME_FROM;
   }
 
-  if(result && result != PARAM_HELP_REQUESTED &&
-     result != PARAM_MANUAL_REQUESTED &&
-     result != PARAM_VERSION_INFO_REQUESTED &&
-     result != PARAM_ENGINES_REQUESTED &&
-     result != PARAM_CA_EMBED_REQUESTED) {
-    const char *reason = param2text(result);
+  if(err &&
+     err != PARAM_HELP_REQUESTED &&
+     err != PARAM_MANUAL_REQUESTED &&
+     err != PARAM_VERSION_INFO_REQUESTED &&
+     err != PARAM_ENGINES_REQUESTED &&
+     err != PARAM_CA_EMBED_REQUESTED) {
+    const char *reason = param2text(err);
 
     if(orig_opt && strcmp(":", orig_opt))
       helpf("option %s: %s", orig_opt, reason);
@@ -3107,5 +3209,5 @@ ParameterError parse_args(int argc, argv_item_t argv[])
   }
 
   unicodefree(CURL_UNCONST(orig_opt));
-  return result;
+  return err;
 }

@@ -31,6 +31,11 @@ CURLcode curl_easy_getinfo(CURL *handle, CURLINFO_CONTENT_LENGTH_UPLOAD_T,
 Pass a pointer to a *curl_off_t* to receive the specified size of the
 upload. Stores -1 if the size is not known.
 
+This is the size set by the client prior to the transfer start. The expected
+upload amount. Compare this with CURLINFO_SIZE_UPLOAD_T(3), which is the
+amount of data that was actually uploaded in the end. In many cases those two
+numbers are identical.
+
 # %PROTOCOLS%
 
 # EXAMPLE
@@ -46,11 +51,11 @@ int main(void)
     /* Perform the upload */
     result = curl_easy_perform(curl);
 
-    if(!result) {
+    if(result == CURLE_OK) {
       /* check the size */
       curl_off_t cl;
       result = curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_UPLOAD_T, &cl);
-      if(!result) {
+      if(result == CURLE_OK) {
         printf("Upload size: %" CURL_FORMAT_CURL_OFF_T "\n", cl);
       }
     }

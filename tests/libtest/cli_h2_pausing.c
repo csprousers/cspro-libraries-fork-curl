@@ -64,7 +64,7 @@ static size_t cb(char *data, size_t size, size_t nmemb, void *clientp)
     ++handle->paused;
     curl_mfprintf(stderr, "INFO: [%zu] write, PAUSING %d time on %zu bytes\n",
                   handle->idx, handle->paused, realsize);
-    assert(handle->paused == 1);
+    DEBUGASSERT(handle->paused == 1);
     return CURL_WRITEFUNC_PAUSE;
   }
   if(handle->fail_write) {
@@ -161,7 +161,7 @@ static CURLcode test_cli_h2_pausing(const char *URL)
     result = (CURLcode)1;
     goto cleanup;
   }
-  memset(&resolve, 0, sizeof(resolve));
+
   curl_msnprintf(resolve_buf, sizeof(resolve_buf) - 1, "%s:%s:127.0.0.1",
                  host, port);
   resolve = curl_slist_append(resolve, resolve_buf);
@@ -265,7 +265,7 @@ static CURLcode test_cli_h2_pausing(const char *URL)
               curl_mfprintf(stderr, "ERROR: [%zu] done, paused=%d, "
                             "resumed=%d, result %d - wtf?\n", i,
                             handles[i].paused,
-                            handles[i].resumed, msg->data.result);
+                            handles[i].resumed, (int)msg->data.result);
               result = (CURLcode)1;
               goto cleanup;
             }

@@ -51,7 +51,7 @@ static size_t t2301_write_cb(char *b, size_t size, size_t nitems, void *p)
   curl_mfprintf(stderr, "Called CURLOPT_WRITEFUNCTION with %zu bytes: ",
                 nitems);
   for(i = 0; i < nitems; i++)
-    curl_mfprintf(stderr, "%02x ", (unsigned char)buffer[i]);
+    curl_mfprintf(stderr, "%02x ", buffer[i]);
   curl_mfprintf(stderr, "\n");
   (void)size;
   if(buffer[0] == 0x89) {
@@ -86,7 +86,7 @@ static CURLcode test_lib2301(const char *URL)
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, t2301_write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, curl);
     result = curl_easy_perform(curl);
-    curl_mfprintf(stderr, "curl_easy_perform() returned %d\n", result);
+    curl_mfprintf(stderr, "curl_easy_perform() returned %d\n", (int)result);
 #if 0
     if(result == CURLE_OK)
       t2301_websocket(curl);
@@ -97,6 +97,8 @@ static CURLcode test_lib2301(const char *URL)
   curl_global_cleanup();
   return result;
 #else
-  NO_SUPPORT_BUILT_IN
+  (void)URL;
+  curl_mfprintf(stderr, "Missing support\n");
+  return CURLE_UNSUPPORTED_PROTOCOL;
 #endif
 }

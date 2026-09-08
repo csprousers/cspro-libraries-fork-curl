@@ -35,9 +35,8 @@
 
    my $pi = 3.1415;
    foreach my $i (1 .. 200) {
-     printf "%d, ", sin($i/200 * 2 * $pi) * 500000 + 500000;
-   }
-*/
+     printf "%d, ", sin($i / 200 * 2 * $pi) * 500000 + 500000;
+   } */
 static const int sinus[] = {
   515704, 531394, 547052, 562664, 578214, 593687, 609068, 624341, 639491,
   654504, 669364, 684057, 698568, 712883, 726989, 740870, 754513, 767906,
@@ -78,13 +77,13 @@ static void fly(struct ProgressData *bar, bool moved)
 
   memcpy(&buf[bar->bar + 1], "-=O=-", 5);
 
-  pos = sinus[bar->tick % 200] / (1000000 / check) + 1;
+  pos = (sinus[bar->tick % 200] / (1000000 / check)) + 1;
   buf[pos] = '#';
-  pos = sinus[(bar->tick + 5) % 200] / (1000000 / check) + 1;
+  pos = (sinus[(bar->tick + 5) % 200] / (1000000 / check)) + 1;
   buf[pos] = '#';
-  pos = sinus[(bar->tick + 10) % 200] / (1000000 / check) + 1;
+  pos = (sinus[(bar->tick + 10) % 200] / (1000000 / check)) + 1;
   buf[pos] = '#';
-  pos = sinus[(bar->tick + 15) % 200] / (1000000 / check) + 1;
+  pos = (sinus[(bar->tick + 15) % 200] / (1000000 / check)) + 1;
   buf[pos] = '#';
 
   fputs(buf, bar->out);
@@ -104,23 +103,15 @@ static void fly(struct ProgressData *bar, bool moved)
 }
 
 /*
-** callback for CURLOPT_XFERINFOFUNCTION
-*/
-
-#if (SIZEOF_CURL_OFF_T < 8)
-#error "too small curl_off_t"
-#else
-   /* assume SIZEOF_CURL_OFF_T == 8 */
-#  define CURL_OFF_T_MAX 0x7FFFFFFFFFFFFFFF
-#endif
-
+ * callback for CURLOPT_XFERINFOFUNCTION
+ */
 static void update_width(struct ProgressData *bar)
 {
   int cols = get_terminal_columns();
   if(cols > MAX_BARLENGTH)
     bar->width = MAX_BARLENGTH;
   else if(cols > MIN_BARLENGTH)
-    bar->width = (int)cols;
+    bar->width = cols;
   else
     bar->width = MIN_BARLENGTH;
 }
@@ -135,32 +126,43 @@ int tool_progress_cb(void *clientp,
   struct ProgressData *bar = &per->progressbar;
   curl_off_t total;
   curl_off_t point;
+  curl_off_t totalall;
+  curl_off_t nowall;
+
+  totalall = ((CURL_OFF_T_MAX - dltotal) < ultotal) ?
+    CURL_OFF_T_MAX : dltotal + ultotal;
+
+  nowall = ((CURL_OFF_T_MAX - dlnow) < ulnow) ?
+    CURL_OFF_T_MAX : dlnow + ulnow;
+
+  if(!bar->calls)
+    update_width(bar);
 
   /* Calculate expected transfer size. initial_size can be less than zero when
      indicating that we are expecting to get the filesize from the remote */
   if(bar->initial_size < 0) {
     if(dltotal || ultotal)
-      total = dltotal + ultotal;
+      total = totalall;
     else
       total = CURL_OFF_T_MAX;
   }
-  else if((CURL_OFF_T_MAX - bar->initial_size) < (dltotal + ultotal))
+  else if((CURL_OFF_T_MAX - bar->initial_size) < totalall)
     total = CURL_OFF_T_MAX;
   else
-    total = dltotal + ultotal + bar->initial_size;
+    total = totalall + bar->initial_size;
 
   /* Calculate the current progress. initial_size can be less than zero when
      indicating that we are expecting to get the filesize from the remote */
   if(bar->initial_size < 0) {
     if(dltotal || ultotal)
-      point = dlnow + ulnow;
+      point = nowall;
     else
       point = CURL_OFF_T_MAX;
   }
-  else if((CURL_OFF_T_MAX - bar->initial_size) < (dlnow + ulnow))
+  else if((CURL_OFF_T_MAX - bar->initial_size) < nowall)
     point = CURL_OFF_T_MAX;
   else
-    point = dlnow + ulnow + bar->initial_size;
+    point = nowall + bar->initial_size;
 
   if(bar->calls) {
     /* after first call... */
@@ -183,7 +185,7 @@ int tool_progress_cb(void *clientp,
     }
   }
 
-  /* simply count invokes */
+  /* count invokes */
   bar->calls++;
 
   update_width(bar);
@@ -207,13 +209,13 @@ int tool_progress_cb(void *clientp,
     memset(line, '#', num);
     line[num] = '\0';
     curl_msnprintf(format, sizeof(format), "\r%%-%ds %%5.1f%%%%", barwidth);
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat-nonliteral"
+#ifdef CURL_HAVE_DIAG
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
 #endif
     curl_mfprintf(bar->out, format, line, percent);
-#ifdef __clang__
-#pragma clang diagnostic pop
+#ifdef CURL_HAVE_DIAG
+#pragma GCC diagnostic pop
 #endif
   }
   fflush(bar->out);
@@ -233,11 +235,9 @@ void progressbarinit(struct ProgressData *bar, struct OperationConfig *config)
   memset(bar, 0, sizeof(struct ProgressData));
 
   /* pass the resume from value through to the progress function so it can
-   * display progress towards total file not just the part that is left. */
+   * display progress towards total file not the part that is left. */
   if(config->use_resume)
     bar->initial_size = config->resume_from;
-
-  update_width(bar);
 
   bar->out = tool_stderr;
   bar->tick = 150;

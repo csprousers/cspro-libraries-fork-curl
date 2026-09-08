@@ -23,32 +23,31 @@
  ***************************************************************************/
 #include "curl_setup.h"
 
-#if !defined(CURL_DISABLE_COOKIES) || !defined(CURL_DISABLE_ALTSVC) ||  \
+#if !defined(CURL_DISABLE_COOKIES) || !defined(CURL_DISABLE_ALTSVC) || \
   !defined(CURL_DISABLE_HSTS)
 
 #include "urldata.h"
 #include "rand.h"
 #include "curl_fopen.h"
 
-/*
-  The dirslash() function breaks a null-terminated pathname string into
-  directory and filename components then returns the directory component up
-  to, *AND INCLUDING*, a final '/'. If there is no directory in the path,
-  this instead returns a "" string.
+/* The dirslash() function breaks a null-terminated pathname string into
+   directory and filename components then returns the directory component up
+   to, *AND INCLUDING*, a final '/'. If there is no directory in the path,
+   this instead returns a "" string.
 
-  This function returns a pointer to malloc'ed memory.
+   This function returns a pointer to malloc'ed memory.
 
-  The input path to this function is expected to have a filename part.
-*/
+   The input path to this function is expected to have a filename part.
+ */
 
 #ifdef _WIN32
-#define PATHSEP "\\"
+#define PATHSEP   "\\"
 #define IS_SEP(x) (((x) == '/') || ((x) == '\\'))
 #elif defined(MSDOS) || defined(OS2)
-#define PATHSEP "\\"
+#define PATHSEP   "\\"
 #define IS_SEP(x) ((x) == '\\')
 #else
-#define PATHSEP "/"
+#define PATHSEP   "/"
 #define IS_SEP(x) ((x) == '/')
 #endif
 
@@ -89,7 +88,7 @@ CURLcode Curl_fopen(struct Curl_easy *data, const char *filename,
   unsigned char randbuf[41];
   char *tempstore = NULL;
 #ifndef _WIN32
-  struct_stat sb;
+  curlx_struct_stat sb;
 #endif
   int fd = -1;
   char *dir = NULL;
@@ -99,11 +98,18 @@ CURLcode Curl_fopen(struct Curl_easy *data, const char *filename,
   *fh = curlx_fopen(filename, FOPEN_WRITETEXT);
   if(!*fh)
     goto fail;
-  if(fstat(fileno(*fh), &sb) == -1 || !S_ISREG(sb.st_mode)) {
+  if(curlx_fstat(fileno(*fh), &sb) == -1 || !S_ISREG(sb.st_mode)) {
     return CURLE_OK;
   }
   curlx_fclose(*fh);
+#ifdef HAVE_GETEUID
+  /* If the existing file is not owned by the user, do not inherit
+   * its permissions at the temp file created below. The permissions
+   * might be unsuitable for holding user private data. */
+  if(sb.st_uid != geteuid())
+    sb.st_mode = 0;
 #endif
+#endif /* !_WIN32 */
   *fh = NULL;
 
   result = Curl_rand_alnum(data, randbuf, sizeof(randbuf));
@@ -125,8 +131,8 @@ CURLcode Curl_fopen(struct Curl_easy *data, const char *filename,
 
   result = CURLE_WRITE_ERROR;
 #ifdef _WIN32
-  fd = curlx_open(tempstore, O_WRONLY | O_CREAT | O_EXCL,
-                  S_IREAD | S_IWRITE);
+  fd = curlx_open(tempstore, _O_WRONLY | _O_CREAT | _O_EXCL,
+                  _S_IREAD | _S_IWRITE);
 #elif (defined(ANDROID) || defined(__ANDROID__)) && \
   (defined(__i386__) || defined(__arm__))
   fd = curlx_open(tempstore, O_WRONLY | O_CREAT | O_EXCL,
@@ -147,7 +153,7 @@ CURLcode Curl_fopen(struct Curl_easy *data, const char *filename,
 
 fail:
   if(fd != -1) {
-    close(fd);
+    curlx_close(fd);
     unlink(tempstore);
   }
 

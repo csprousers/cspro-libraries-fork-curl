@@ -28,11 +28,14 @@
 #include "rand.h"
 #include "curlx/nonblock.h"
 
+#ifndef CURL_DISABLE_SOCKETPAIR
+
+/* choose implementation */
 #ifdef USE_EVENTFD
 
 #include <sys/eventfd.h>
 
-int Curl_eventfd(curl_socket_t socks[2], bool nonblocking)
+static int wakeup_eventfd(curl_socket_t socks[2], bool nonblocking)
 {
   int efd = eventfd(0, nonblocking ? EFD_CLOEXEC | EFD_NONBLOCK : EFD_CLOEXEC);
   if(efd == -1) {
@@ -49,7 +52,7 @@ int Curl_eventfd(curl_socket_t socks[2], bool nonblocking)
 #include <fcntl.h>
 #endif
 
-int Curl_pipe(curl_socket_t socks[2], bool nonblocking)
+static int wakeup_pipe(curl_socket_t socks[2], bool nonblocking)
 {
 #ifdef HAVE_PIPE2
   int flags = nonblocking ? O_NONBLOCK | O_CLOEXEC : O_CLOEXEC;
@@ -61,8 +64,8 @@ int Curl_pipe(curl_socket_t socks[2], bool nonblocking)
 #ifdef HAVE_FCNTL
   if(fcntl(socks[0], F_SETFD, FD_CLOEXEC) ||
      fcntl(socks[1], F_SETFD, FD_CLOEXEC)) {
-    close(socks[0]);
-    close(socks[1]);
+    sclose(socks[0]);
+    sclose(socks[1]);
     socks[0] = socks[1] = CURL_SOCKET_BAD;
     return -1;
   }
@@ -70,8 +73,8 @@ int Curl_pipe(curl_socket_t socks[2], bool nonblocking)
   if(nonblocking) {
     if(curlx_nonblock(socks[0], TRUE) < 0 ||
        curlx_nonblock(socks[1], TRUE) < 0) {
-      close(socks[0]);
-      close(socks[1]);
+      sclose(socks[0]);
+      sclose(socks[1]);
       socks[0] = socks[1] = CURL_SOCKET_BAD;
       return -1;
     }
@@ -81,33 +84,49 @@ int Curl_pipe(curl_socket_t socks[2], bool nonblocking)
   return 0;
 }
 
-#endif /* USE_EVENTFD */
+#elif defined(HAVE_SOCKETPAIR)  /* !USE_EVENTFD && !HAVE_PIPE */
 
-#ifndef CURL_DISABLE_SOCKETPAIR
-#ifdef HAVE_SOCKETPAIR
-#ifdef USE_SOCKETPAIR
-int Curl_socketpair(int domain, int type, int protocol,
-                    curl_socket_t socks[2], bool nonblocking)
-{
-#ifdef SOCK_NONBLOCK
-  type = nonblocking ? type | SOCK_NONBLOCK : type;
+#ifndef USE_UNIX_SOCKETS
+#error "unsupported Unix domain and socketpair build combo"
 #endif
-  if(CURL_SOCKETPAIR(domain, type, protocol, socks))
+
+static int wakeup_socketpair(curl_socket_t socks[2], bool nonblocking)
+{
+  int type = SOCK_STREAM;
+#ifdef SOCK_CLOEXEC
+  type |= SOCK_CLOEXEC;
+#endif
+#ifdef CURL_USE_SOCK_NONBLOCK
+  if(nonblocking)
+    type |= SOCK_NONBLOCK;
+#endif
+
+  if(CURL_SOCKETPAIR(AF_UNIX, type, 0, socks))
     return -1;
-#ifndef SOCK_NONBLOCK
+#ifndef CURL_USE_SOCK_NONBLOCK
   if(nonblocking) {
     if(curlx_nonblock(socks[0], TRUE) < 0 ||
        curlx_nonblock(socks[1], TRUE) < 0) {
-      close(socks[0]);
-      close(socks[1]);
+      sclose(socks[0]);
+      sclose(socks[1]);
+      socks[0] = socks[1] = CURL_SOCKET_BAD;
       return -1;
     }
   }
 #endif
+#ifdef USE_SO_NOSIGPIPE
+  if(Curl_sock_nosigpipe(socks[1]) < 0) {
+    sclose(socks[0]);
+    sclose(socks[1]);
+    socks[0] = socks[1] = CURL_SOCKET_BAD;
+    return -1;
+  }
+#endif /* USE_SO_NOSIGPIPE */
+
   return 0;
 }
-#endif /* USE_SOCKETPAIR */
-#else /* !HAVE_SOCKETPAIR */
+
+#else /* !USE_EVENTFD && !HAVE_PIPE && !HAVE_SOCKETPAIR */
 
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
@@ -125,8 +144,7 @@ int Curl_socketpair(int domain, int type, int protocol,
 
 #include "select.h"   /* for Curl_poll */
 
-int Curl_socketpair(int domain, int type, int protocol,
-                    curl_socket_t socks[2], bool nonblocking)
+static int wakeup_inet(curl_socket_t socks[2], bool nonblocking)
 {
   union {
     struct sockaddr_in inaddr;
@@ -136,9 +154,6 @@ int Curl_socketpair(int domain, int type, int protocol,
   curl_socklen_t addrlen = sizeof(a.inaddr);
   int reuse = 1;
   struct pollfd pfd[1];
-  (void)domain;
-  (void)type;
-  (void)protocol;
 
   listener = CURL_SOCKET(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if(listener == CURL_SOCKET_BAD)
@@ -217,16 +232,9 @@ int Curl_socketpair(int domain, int type, int protocol,
         /* Do not block forever */
         if(curlx_timediff_ms(curlx_now(), start) > (60 * 1000))
           goto error;
-        if(
-#ifdef USE_WINSOCK
-           /* This is how Windows does it */
-           (SOCKEWOULDBLOCK == sockerr)
-#else
-           /* errno may be EWOULDBLOCK or on some systems EAGAIN when it
-              returned due to its inability to send off data without
-              blocking. We therefore treat both error codes the same here */
-           (SOCKEWOULDBLOCK == sockerr) || (EAGAIN == sockerr) ||
-           (SOCKEINTR == sockerr) || (SOCKEINPROGRESS == sockerr)
+        if(SOCK_EAGAIN(sockerr)
+#ifndef USE_WINSOCK
+           || (sockerr == SOCKEINTR) || (sockerr == SOCKEINPROGRESS)
 #endif
           ) {
           continue;
@@ -248,6 +256,10 @@ int Curl_socketpair(int domain, int type, int protocol,
     if(curlx_nonblock(socks[0], TRUE) < 0 ||
        curlx_nonblock(socks[1], TRUE) < 0)
       goto error;
+#ifdef USE_SO_NOSIGPIPE
+  if(Curl_sock_nosigpipe(socks[1]) < 0)
+    goto error;
+#endif
   sclose(listener);
   return 0;
 
@@ -255,7 +267,98 @@ error:
   sclose(listener);
   sclose(socks[0]);
   sclose(socks[1]);
+  socks[0] = socks[1] = CURL_SOCKET_BAD;
   return -1;
 }
+
+#endif /* choose implementation */
+
+int Curl_wakeup_init(curl_socket_t socks[2], bool nonblocking)
+{
+#ifdef USE_EVENTFD
+  return wakeup_eventfd(socks, nonblocking);
+#elif defined(HAVE_PIPE)
+  return wakeup_pipe(socks, nonblocking);
+#elif defined(HAVE_SOCKETPAIR)
+  return wakeup_socketpair(socks, nonblocking);
+#else
+  return wakeup_inet(socks, nonblocking);
 #endif
+}
+
+#if defined(USE_EVENTFD) || defined(HAVE_PIPE)
+
+#define wakeup_write        write
+#define wakeup_read         read
+#define wakeup_close        close
+
+#else /* !USE_EVENTFD && !HAVE_PIPE */
+
+#define wakeup_write        swrite
+#define wakeup_read         sread
+#define wakeup_close        sclose
+
+#endif
+
+int Curl_wakeup_signal(curl_socket_t socks[2])
+{
+  int sockerr = 0;
+#ifdef USE_EVENTFD
+  const uint64_t buf[1] = { 1 };
+#else
+  const char buf[1] = { 1 };
+#endif
+
+  while(1) {
+    sockerr = 0;
+    if(wakeup_write(socks[1], buf, sizeof(buf)) < 0) {
+      sockerr = SOCKERRNO;
+#ifndef USE_WINSOCK
+      if(sockerr == SOCKEINTR)
+        continue;
+#endif
+      if(SOCK_EAGAIN(sockerr))
+        sockerr = 0; /* wakeup is already ongoing */
+    }
+    break;
+  }
+  return sockerr;
+}
+
+CURLcode Curl_wakeup_consume(curl_socket_t socks[2], bool all)
+{
+  char buf[64];
+  ssize_t rc;
+  CURLcode result = CURLE_OK;
+
+  do {
+    rc = wakeup_read(socks[0], buf, sizeof(buf));
+    if(!rc)
+      break;
+    else if(rc < 0) {
+      int sockerr = SOCKERRNO;
+#ifndef USE_WINSOCK
+      if(sockerr == SOCKEINTR)
+        continue;
+#endif
+      if(SOCK_EAGAIN(sockerr))
+        break;
+      result = CURLE_READ_ERROR;
+      break;
+    }
+  } while(all);
+  return result;
+}
+
+void Curl_wakeup_destroy(curl_socket_t socks[2])
+{
+#ifndef USE_EVENTFD
+  if(socks[1] != CURL_SOCKET_BAD)
+    wakeup_close(socks[1]);
+#endif
+  if(socks[0] != CURL_SOCKET_BAD)
+    wakeup_close(socks[0]);
+  socks[0] = socks[1] = CURL_SOCKET_BAD;
+}
+
 #endif /* !CURL_DISABLE_SOCKETPAIR */

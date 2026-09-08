@@ -33,8 +33,9 @@
 #include <arpa/inet.h>
 #endif
 
+#include "curl_addrinfo.h"
 #include "hash.h"
-#include "hostip.h"
+#include "vdns/dnscache.h"
 
 static struct Curl_dnscache hp;
 static char *data_key;
@@ -105,14 +106,14 @@ static CURLcode test_unit1305(const char *arg)
 
   /* Test 1305 exits without adding anything to the hash */
   if(testnum == 1306) {
-    CURLcode rc = create_node();
-    abort_unless(rc == CURLE_OK, "data node creation failed");
+    CURLcode result = create_node();
+    abort_unless(result == CURLE_OK, "data node creation failed");
     key_len = strlen(data_key);
 
-    data_node->refcount = 1; /* hash will hold the reference */
+    data_node->refcount = 1; /* hash holds the reference */
     nodep = Curl_hash_add(&hp.entries, data_key, key_len + 1, data_node);
     abort_unless(nodep, "insertion into hash failed");
-    /* Freeing will now be done by Curl_hash_destroy */
+    /* Freeing is done now by Curl_hash_destroy */
     data_node = NULL;
   }
 

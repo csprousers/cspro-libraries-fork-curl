@@ -892,8 +892,8 @@ if(ZLIB_FOUND)
   set(HAVE_LIBZ ON)
   # Depend on ZLIB via imported targets. This allows our dependents to
   # get our dependencies transitively.
-  list(APPEND CURL_LIBS ZLIB::ZLIB)
-  set_target_properties(ZLIB::ZLIB PROPERTIES INTERFACE_LIBCURL_PC_MODULES "zlib")
+  # list(APPEND CURL_LIBS ZLIB::ZLIB)
+  # set_target_properties(ZLIB::ZLIB PROPERTIES INTERFACE_LIBCURL_PC_MODULES "zlib")
 endif()
 
 set(HAVE_BROTLI OFF)
